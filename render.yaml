@@ -36,4 +36,4 @@ databases:
   - name: knovara-db
     plan: free
     databaseName: knovara
-    user: postgres
+    user: knovara_user
