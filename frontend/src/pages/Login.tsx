@@ -47,8 +47,13 @@ export const Login: React.FC = () => {
                   setIsGoogleSubmitting(true);
                   await loginGoogle({ id_token: response.credential, token: response.credential });
                   navigate(from, { replace: true });
-                } catch {
-                  setErrorMessage('Google authentication could not be completed.');
+                } catch (err: unknown) {
+                  if (err && typeof err === 'object' && 'response' in err) {
+                    const axiosErr = err as { response?: { data?: { detail?: string } } };
+                    setErrorMessage(axiosErr.response?.data?.detail || 'Google authentication rejected by server.');
+                  } else {
+                    setErrorMessage('Google authentication could not reach the backend API. Please verify your backend server is running and VITE_API_BASE_URL is configured.');
+                  }
                 } finally {
                   setIsGoogleSubmitting(false);
                 }

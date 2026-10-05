@@ -20,7 +20,7 @@ services:
       - key: JWT_ALGORITHM
         value: HS256
       - key: CORS_ORIGINS
-        value: "https://your-frontend.vercel.app,http://localhost:5173"
+        value: "https://knovara-beta.vercel.app,http://localhost:5173"
       - key: LLM_PROVIDER
         value: gemini
       - key: LLM_API_KEY

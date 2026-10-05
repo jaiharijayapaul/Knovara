@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/knovara"
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,https://knovara-beta.vercel.app"
 
     # Security
     JWT_SECRET: str = "knovara_hackathon_super_secret_jwt_key_2026"
