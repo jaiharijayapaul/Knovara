@@ -2,6 +2,7 @@
 
 from typing import List
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.config import settings
@@ -120,6 +121,39 @@ async def send_message(
         session_id=session_id,
         user_id=current_user.id,
         payload=payload,
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/messages/stream",
+    summary="Send student message turn with SSE streaming",
+    description="Submits a student question, emits citations immediately, and streams response tokens in real-time.",
+)
+@limiter.limit(settings.LLM_RATE_LIMIT)
+async def send_message_stream(
+    request: Request,
+    course_id: str,
+    session_id: str,
+    payload: TutorMessageCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Stream student turn and tutor response via Server-Sent Events."""
+    generator = await TutorService.send_message_stream(
+        db=db,
+        course_id=course_id,
+        session_id=session_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

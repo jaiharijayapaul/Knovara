@@ -1,8 +1,8 @@
-"""Pedagogical Engine implementing 7 specialized tutoring styles with grounded source citations."""
-
+import asyncio
+import json
 import logging
 import httpx
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, AsyncGenerator
 from app.config import settings
 from app.schemas.rag import SourceCitation
 
@@ -160,6 +160,110 @@ class PedagogicalEngine:
                 return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
         return ""
+
+    @classmethod
+    async def stream_turn(
+        cls,
+        user_message: str,
+        pedagogical_mode: str,
+        citations: List[SourceCitation],
+        history: List[Dict[str, str]],
+        course_name: str,
+        topic: str | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream tutor dialogue turn token-by-token using Gemini streaming API,
+        or falling back gracefully to typewriter streaming of the pedagogical synthesis.
+        """
+        mode = pedagogical_mode.lower()
+        if mode not in PEDAGOGICAL_PROMPTS:
+            mode = "socratic"
+
+        api_key = settings.LLM_API_KEY or settings.GEMINI_API_KEY
+        streamed_any = False
+
+        if api_key and len(api_key.strip()) > 10:
+            try:
+                system_instruction = PEDAGOGICAL_PROMPTS[mode]
+                context_parts = []
+                for c in citations:
+                    loc = (
+                        f"Page {c.page_number}"
+                        if c.page_number
+                        else f"Slide {c.slide_number}"
+                        if c.slide_number
+                        else f"Timestamp {c.timestamp_start}-{c.timestamp_end}"
+                        if c.timestamp_start
+                        else "Section"
+                    )
+                    context_parts.append(f"{c.citation_label} [{c.document_name}, {loc}]: {c.snippet}")
+
+                grounding_context = "\n".join(context_parts)
+
+                contents = []
+                for turn in history[-6:]:
+                    role = "user" if turn["sender"] == "user" else "model"
+                    contents.append({"role": role, "parts": [{"text": turn["content"]}]})
+
+                current_prompt = (
+                    f"You are a friendly, encouraging AI Study Tutor for students studying '{course_name}' (Topic: {topic or 'General'}).\n"
+                    f"ACTIVE TEACHING MODE: {mode.upper()} ({system_instruction})\n\n"
+                    f"CRITICAL TEACHING RULES:\n"
+                    f"1. DIRECT AND FACTUAL ANSWER: When the student asks a question or asks to explain a concept, YOU MUST FIRST ANSWER THE QUESTION DIRECTLY, CORRECTLY, AND COMPLETELY using the facts, definitions, rules, and formulas in the grounded excerpts below. Do not respond with only questions! Provide the clear, accurate answer up front so the student learns what they asked about.\n"
+                    f"2. SIMPLE WORDS: Explain the answer in simple, crystal-clear, friendly language that any student can understand.\n"
+                    f"3. CITATIONS: Clearly cite the exact source tags (e.g. {citations[0].citation_label if citations else '[Doc 1]'}) for the facts you explain.\n"
+                    f"4. TEACHING WRAP-UP ({mode.upper()}):\n"
+                    f"   - If Socratic: Provide the complete direct answer first, and then wrap up with 1 friendly question to help them reflect on what they just learned.\n"
+                    f"   - If Analogy: Provide the direct answer first, and explain it with an everyday real-world analogy.\n"
+                    f"   - If First Principles: Break down the direct answer into simple foundational steps.\n"
+                    f"   - If Misconception Buster: Provide the direct answer first, and highlight a common trap students face.\n"
+                    f"   - If Exam Prep: Provide the direct answer first, followed by key high-yield exam takeaways.\n"
+                    f"   - If Deep Dive: Provide a thorough, structured breakdown of the answer.\n"
+                    f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n\n"
+                    f"GROUNDED COURSE EXCERPTS:\n{grounding_context}\n\n"
+                    f"STUDENT TURN: {user_message}\n\n"
+                    f"TUTOR RESPONSE:"
+                )
+                contents.append({"role": "user", "parts": [{"text": current_prompt}]})
+
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.LLM_MODEL}:streamGenerateContent?alt=sse&key={api_key}"
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with client.stream("POST", url, json={"contents": contents}) as res:
+                        if res.status_code == 200:
+                            async for raw_line in res.aiter_lines():
+                                line = raw_line.strip()
+                                if line.startswith("data: "):
+                                    payload_str = line[6:].strip()
+                                    try:
+                                        chunk_json = json.loads(payload_str)
+                                        candidates = chunk_json.get("candidates", [])
+                                        if candidates:
+                                            parts = candidates[0].get("content", {}).get("parts", [])
+                                            for part in parts:
+                                                chunk_text = part.get("text", "")
+                                                if chunk_text:
+                                                    streamed_any = True
+                                                    yield chunk_text
+                                    except Exception:
+                                        pass
+            except Exception as e:
+                logger.warning(f"Gemini streaming exception, falling back: {e}")
+
+        # If Gemini didn't stream any content, gracefully stream local synthesis
+        if not streamed_any:
+            local_reply = cls._synthesize_local_pedagogical_turn(
+                user_message=user_message,
+                mode=mode,
+                citations=citations,
+                history=history,
+                course_name=course_name,
+                topic=topic,
+            )
+            words = local_reply.split(" ")
+            for i, word in enumerate(words):
+                suffix = " " if i < len(words) - 1 else ""
+                yield word + suffix
+                await asyncio.sleep(0.015)
 
     @classmethod
     def _synthesize_local_pedagogical_turn(

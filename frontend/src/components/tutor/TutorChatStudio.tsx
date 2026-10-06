@@ -4,6 +4,7 @@ import {
   createTutorSession, 
   fetchTutorSessionDetail, 
   sendTutorMessage, 
+  streamTutorMessage,
   updateTutorSessionMode, 
   deleteTutorSession 
 } from '@/services/api';
@@ -196,6 +197,7 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
   };
 
   // Handle sending a message
+  // Send message in current active session with live SSE streaming
   const handleSendMessage = async (textToSend?: string) => {
     const messageContent = (textToSend || inputMessage).trim();
     if (!messageContent || !activeSessionId || isSending) return;
@@ -215,31 +217,92 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
       created_at: new Date().toISOString()
     };
 
+    // Prepare live streaming assistant placeholder
+    const streamingAssistantId = `streaming-assistant-${Date.now()}`;
+    const streamingAssistantMsg: TutorMessage = {
+      id: streamingAssistantId,
+      session_id: activeSessionId,
+      sender: 'assistant',
+      content: '',
+      pedagogical_mode: currentMode,
+      citations: [],
+      created_at: new Date().toISOString()
+    };
+
     setSessionDetail(prev => prev ? {
       ...prev,
-      messages: [...prev.messages, tempUserMsg]
+      messages: [...prev.messages, tempUserMsg, streamingAssistantMsg]
     } : null);
 
     try {
-      const assistantReply = await sendTutorMessage(courseId, activeSessionId, {
-        content: messageContent
-      });
-
-      // Update session detail with assistant response
-      setSessionDetail(prev => {
-        if (!prev) return null;
-        // Replace temp message with actual user message and append assistant reply
-        return {
-          ...prev,
-          messages: [...prev.messages, assistantReply]
-        };
-      });
-
-      // Also refresh sessions list so updated_at moves to top
-      loadSessions();
-    } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to get tutor response. Please try again.';
-      setSendError(errorMsg);
+      await streamTutorMessage(
+        courseId,
+        activeSessionId,
+        { content: messageContent },
+        {
+          onCitations: (citations) => {
+            setSessionDetail(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                messages: prev.messages.map(m =>
+                  m.id === streamingAssistantId ? { ...m, citations } : m
+                )
+              };
+            });
+          },
+          onToken: (token) => {
+            setSessionDetail(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                messages: prev.messages.map(m =>
+                  m.id === streamingAssistantId ? { ...m, content: m.content + token } : m
+                )
+              };
+            });
+          },
+          onDone: (savedMsg) => {
+            setSessionDetail(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                messages: prev.messages.map(m =>
+                  m.id === streamingAssistantId ? savedMsg : m
+                )
+              };
+            });
+            loadSessions();
+          }
+        }
+      );
+    } catch (streamErr: unknown) {
+      console.warn('SSE Streaming connection note, attempting fallback:', streamErr);
+      try {
+        const assistantReply = await sendTutorMessage(courseId, activeSessionId, {
+          content: messageContent
+        });
+        setSessionDetail(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            messages: prev.messages.map(m =>
+              m.id === streamingAssistantId ? assistantReply : m
+            )
+          };
+        });
+        loadSessions();
+      } catch (err: unknown) {
+        setSessionDetail(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            messages: prev.messages.filter(m => m.id !== streamingAssistantId)
+          };
+        });
+        const errorMsg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to get tutor response. Please try again.';
+        setSendError(errorMsg);
+      }
     } finally {
       setIsSending(false);
     }
@@ -500,6 +563,18 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
                       >
                         <div className="whitespace-pre-wrap font-sans space-y-2">
                           {message.content}
+                          {isSending && message.id.startsWith('streaming-assistant-') && (
+                            <>
+                              {message.content ? (
+                                <span className="inline-block w-1.5 h-4 ml-0.5 bg-indigo-400 animate-pulse align-middle" />
+                              ) : (
+                                <span className="inline-flex items-center gap-2 text-slate-400 text-xs italic py-1">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                                  Synthesizing course grounding in <strong className={msgModeMeta.colorClass}>{msgModeMeta.label}</strong> mode...
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
 
                         {/* Multimodal Source Citations Shelf */}
@@ -541,26 +616,6 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
                     </div>
                   );
                 })}
-
-                {/* Sending indicator bubble */}
-                {isSending && (
-                  <div className="flex flex-col items-start max-w-2xl mr-auto">
-                    <div className="flex items-center gap-2 mb-1 px-1 text-[11px] text-slate-400">
-                      <span className={`inline-flex items-center gap-1 font-semibold ${activeModeMeta.colorClass}`}>
-                        {renderModeIcon(currentMode, 'w-3 h-3')}
-                        {activeModeMeta.label}
-                      </span>
-                      <span>&bull;</span>
-                      <span>Formulating pedagogical guidance...</span>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-slate-800/90 border border-slate-700/70 text-slate-300 rounded-tl-none flex items-center gap-3">
-                      <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                      <span className="text-xs">
-                        Synthesizing course grounding in <strong className={activeModeMeta.colorClass}>{activeModeMeta.label}</strong> mode...
-                      </span>
-                    </div>
-                  </div>
-                )}
 
                 <div ref={messagesEndRef} />
               </>

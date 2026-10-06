@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import List
+from typing import List, AsyncGenerator
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.repositories.course_repository import CourseRepository
@@ -244,9 +244,12 @@ class TutorService:
             docs = DocumentRepository.list_by_course(db, course_id)
             if docs:
                 try:
-                    retriever = HybridRetriever(db, course_id)
-                    rag_cites = retriever.retrieve(concept, top_k=2)
-                    citations.extend(rag_cites)
+                    all_chunks = []
+                    for d in docs:
+                        all_chunks.extend(d.chunks)
+                    if all_chunks:
+                        rag_cites = HybridRetriever.retrieve(query=concept, chunks=all_chunks, top_k=2)
+                        citations.extend(rag_cites)
                 except Exception as e:
                     logger.warning(f"RAG citation retrieval for remediation concept failed: {e}")
 
@@ -414,6 +417,99 @@ class TutorService:
         )
 
         return cls._deserialize_message(assistant_msg)
+
+    @classmethod
+    async def send_message_stream(
+        cls,
+        db: Session,
+        course_id: str,
+        session_id: str,
+        user_id: str,
+        payload: TutorMessageCreate,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Process student turn and stream grounded tutor response via Server-Sent Events (SSE).
+        Yields citations immediately, tokens progressively, and final persisted message at completion.
+        """
+        course = cls._verify_course_ownership(db, course_id, user_id)
+        session = TutorRepository.get_session(db, session_id, course_id, user_id)
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tutoring session not found.",
+            )
+
+        # 1. Record student turn
+        user_msg = TutorRepository.add_message(
+            db=db,
+            session_id=session.id,
+            sender="user",
+            content=payload.content.strip(),
+            pedagogical_mode=session.pedagogical_mode,
+            citations_json=None,
+        )
+        db.commit()
+
+        # 2. Retrieve grounded course citations
+        docs = DocumentRepository.list_by_course(db, course_id)
+        all_chunks = []
+        for d in docs:
+            all_chunks.extend(d.chunks)
+
+        citations = []
+        if all_chunks:
+            citations = HybridRetriever.retrieve(
+                query=payload.content.strip(),
+                chunks=all_chunks,
+                topic_filter=session.topic,
+                top_k=3,
+            )
+
+        # 3. Build dialogue history
+        history = [
+            {"sender": m.sender, "content": m.content}
+            for m in session.messages[-8:]
+        ]
+        ped_mode = session.pedagogical_mode
+        topic = session.topic
+        course_name = course.name
+
+        async def event_generator() -> AsyncGenerator[str, None]:
+            # Emit citations first
+            yield f"data: {json.dumps({'type': 'citations', 'citations': [c.model_dump() for c in citations]})}\n\n"
+
+            accumulated_tokens = []
+            async for token in PedagogicalEngine.stream_turn(
+                user_message=payload.content.strip(),
+                pedagogical_mode=ped_mode,
+                citations=citations,
+                history=history,
+                course_name=course_name,
+                topic=topic,
+            ):
+                accumulated_tokens.append(token)
+                yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
+
+            full_reply = "".join(accumulated_tokens).strip()
+
+            # 4. Persist assistant response with clean database session
+            from app.database import SessionLocal
+            with SessionLocal() as db_session:
+                citations_json = json.dumps([c.model_dump() for c in citations]) if citations else None
+                assistant_msg = TutorRepository.add_message(
+                    db=db_session,
+                    session_id=session_id,
+                    sender="assistant",
+                    content=full_reply,
+                    pedagogical_mode=ped_mode,
+                    citations_json=citations_json,
+                )
+                db_session.commit()
+                final_msg_dto = cls._deserialize_message(assistant_msg)
+
+            yield f"data: {json.dumps({'type': 'done', 'message': final_msg_dto.model_dump(mode='json')})}\n\n"
+
+        return event_generator()
 
     @classmethod
     def update_mode(

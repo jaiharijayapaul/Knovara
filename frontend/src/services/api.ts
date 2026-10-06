@@ -19,6 +19,7 @@ import type {
   RAGQueryRequest,
   RAGResponse,
   RAGIndexStatus,
+  SourceCitation,
 } from '@/types/rag';
 import type {
   TutorSession,
@@ -315,6 +316,87 @@ export const sendTutorMessage = async (
 ): Promise<TutorMessage> => {
   const response = await api.post<TutorMessage>(`/courses/${courseId}/tutor/sessions/${sessionId}/messages`, payload);
   return response.data;
+};
+
+export interface StreamTutorMessageCallbacks {
+  onCitations?: (citations: SourceCitation[]) => void;
+  onToken?: (token: string) => void;
+  onDone?: (message: TutorMessage) => void;
+}
+
+export const streamTutorMessage = async (
+  courseId: string,
+  sessionId: string,
+  payload: SendMessagePayload,
+  callbacks: StreamTutorMessageCallbacks
+): Promise<TutorMessage> => {
+  const token = localStorage.getItem('knovara_token');
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+  const url = `${baseUrl}/courses/${courseId}/tutor/sessions/${sessionId}/messages/stream`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let errDetail = 'Failed to connect to tutor streaming service.';
+    try {
+      const errJson = await response.json();
+      if (errJson?.detail) errDetail = errJson.detail;
+    } catch {
+      // fallback
+    }
+    throw new Error(errDetail);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('Streaming response body is unavailable.');
+  }
+
+  const decoder = new TextDecoder('utf-8');
+  let finalMessage: TutorMessage | null = null;
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ')) continue;
+      const dataStr = trimmed.slice(6).trim();
+      if (!dataStr) continue;
+
+      try {
+        const parsed = JSON.parse(dataStr);
+        if (parsed.type === 'citations' && callbacks.onCitations) {
+          callbacks.onCitations(parsed.citations);
+        } else if (parsed.type === 'token' && callbacks.onToken) {
+          callbacks.onToken(parsed.token);
+        } else if (parsed.type === 'done') {
+          finalMessage = parsed.message;
+          if (callbacks.onDone) callbacks.onDone(parsed.message);
+        }
+      } catch (e) {
+        console.warn('Error parsing SSE chunk:', e);
+      }
+    }
+  }
+
+  if (finalMessage) {
+    return finalMessage;
+  }
+  throw new Error('Streaming completed without final message.');
 };
 
 export const updateTutorSessionMode = async (
