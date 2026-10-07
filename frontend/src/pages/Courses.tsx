@@ -20,7 +20,8 @@ import {
   AlertCircle, 
   LogOut, 
   User, 
-  HelpCircle
+  HelpCircle,
+  Shield
 } from 'lucide-react';
 
 export const Courses: React.FC = () => {
@@ -122,6 +123,15 @@ export const Courses: React.FC = () => {
               <HelpCircle className="w-3.5 h-3.5 text-teal-400" />
               <span>Platform Guide</span>
             </Link>
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 font-semibold transition-all flex items-center space-x-1.5 shadow-sm"
+              >
+                <Shield className="w-3.5 h-3.5 text-rose-400" />
+                <span>Admin Console</span>
+              </Link>
+            )}
           </nav>
 
           <div className="flex items-center space-x-3">

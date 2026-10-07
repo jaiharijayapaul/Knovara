@@ -41,3 +41,17 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def require_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Validate that the authenticated user possesses administrative privileges."""
+    ADMIN_EMAILS = {"jayapauljaihari@gmail.com", "12biog1jaiharij@gmail.com", "admin@knovara.edu"}
+    user_role = getattr(current_user, "role", "student")
+    if user_role != "admin" and current_user.email.lower() not in ADMIN_EMAILS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative privileges required to access this resource.",
+        )
+    return current_user

@@ -9,6 +9,7 @@ import { Register } from '@/pages/Register';
 import { Dashboard } from '@/pages/Dashboard';
 import { Courses } from '@/pages/Courses';
 import { CourseWorkspace } from '@/pages/CourseWorkspace';
+import { AdminDashboard } from '@/pages/AdminDashboard';
 
 export const App: React.FC = () => {
   return (
@@ -46,6 +47,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <CourseWorkspace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />

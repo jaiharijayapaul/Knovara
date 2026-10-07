@@ -21,6 +21,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     education_level = Column(String(50), nullable=False, default="Undergraduate")
+    role = Column(String(20), nullable=False, default="student")
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

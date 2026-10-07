@@ -54,6 +54,7 @@ import type {
   SRSStats,
 } from '@/types/flashcard';
 import type { CourseAnalyticsReport } from '@/types/analytics';
+import type { AdminStats, AdminUser, AdminCourse, AdminActivity } from '@/types/admin';
 
 // Base API client configured with fallback to relative path (handled by Vite proxy in dev)
 export const api = axios.create({
@@ -626,6 +627,48 @@ export const exportCourseAnalytics = async (
   const response = await api.get<CourseAnalyticsReport>(
     `/courses/${courseId}/analytics/export?format=json`
   );
+  return response.data;
+};
+
+// ==========================================
+// PHASE 12: ADMIN COMMAND CENTER & FLEET OPS
+// ==========================================
+
+export const fetchAdminStats = async (): Promise<AdminStats> => {
+  const response = await api.get<AdminStats>('/admin/stats');
+  return response.data;
+};
+
+export const fetchAdminUsers = async (search?: string): Promise<AdminUser[]> => {
+  const response = await api.get<AdminUser[]>('/admin/users', {
+    params: search ? { search } : undefined,
+  });
+  return response.data;
+};
+
+export const updateAdminUserRole = async (
+  userId: string,
+  role: 'student' | 'instructor' | 'admin'
+): Promise<AdminUser> => {
+  const response = await api.patch<AdminUser>(`/admin/users/${userId}/role`, { role });
+  return response.data;
+};
+
+export const fetchAdminCourses = async (search?: string): Promise<AdminCourse[]> => {
+  const response = await api.get<AdminCourse[]>('/admin/courses', {
+    params: search ? { search } : undefined,
+  });
+  return response.data;
+};
+
+export const deleteAdminCourse = async (courseId: string): Promise<void> => {
+  await api.delete(`/admin/courses/${courseId}`);
+};
+
+export const fetchAdminActivity = async (limit: number = 25): Promise<AdminActivity[]> => {
+  const response = await api.get<AdminActivity[]>('/admin/activity', {
+    params: { limit },
+  });
   return response.data;
 };
 

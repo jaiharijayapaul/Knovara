@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100, description="Full name of student")
     email: EmailStr = Field(..., description="Student email address")
     education_level: Optional[str] = Field("Undergraduate", description="Educational level")
+    role: str = Field("student", description="Role: student, instructor, or admin")
 
 
 class UserRegister(UserBase):

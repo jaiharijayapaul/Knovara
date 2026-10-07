@@ -2,6 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  role?: 'student' | 'instructor' | 'admin';
   education_level: string;
   created_at: string;
 }

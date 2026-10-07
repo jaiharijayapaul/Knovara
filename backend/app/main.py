@@ -19,6 +19,7 @@ from app.api.assessments import router as assessments_router
 from app.api.mastery import router as mastery_router
 from app.api.flashcards import router as flashcards_router
 from app.api.analytics import router as analytics_router
+from app.api.admin import router as admin_router
 
 # Configure logging
 logging.basicConfig(
@@ -83,6 +84,8 @@ app.include_router(flashcards_router, prefix="/api/v1")
 app.include_router(flashcards_router, prefix="/api", include_in_schema=False)
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api", include_in_schema=False)
+app.include_router(admin_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api", include_in_schema=False)
 
 
 @app.get("/", tags=["Root"])

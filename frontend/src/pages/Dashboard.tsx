@@ -14,7 +14,8 @@ import {
   UploadCloud, 
   ArrowRight, 
   FileText, 
-  X
+  X,
+  Shield
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -107,6 +108,15 @@ export const Dashboard: React.FC = () => {
               <HelpCircle className="w-3.5 h-3.5 text-teal-400" />
               <span>How It Works</span>
             </Link>
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 font-semibold transition-all flex items-center space-x-1.5 shadow-sm"
+              >
+                <Shield className="w-3.5 h-3.5 text-rose-400" />
+                <span>Admin Console</span>
+              </Link>
+            )}
           </nav>
 
           {/* User Controls */}

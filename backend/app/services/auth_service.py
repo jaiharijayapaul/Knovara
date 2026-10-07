@@ -55,6 +55,12 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        ADMIN_EMAILS = {"jayapauljaihari@gmail.com", "12biog1jaiharij@gmail.com", "admin@knovara.edu"}
+        if user.email.lower() in ADMIN_EMAILS and getattr(user, "role", "student") != "admin":
+            user.role = "admin"
+            db.commit()
+            db.refresh(user)
+
         token = create_access_token(
             data={"sub": user.id, "email": user.email, "name": user.name}
         )
@@ -114,6 +120,12 @@ class AuthService:
             logger.info(f"Created student account via Google Sign-In: {user.email}")
         else:
             logger.info(f"Student logged in via Google: {user.email}")
+
+        ADMIN_EMAILS = {"jayapauljaihari@gmail.com", "12biog1jaiharij@gmail.com", "admin@knovara.edu"}
+        if user.email.lower() in ADMIN_EMAILS and getattr(user, "role", "student") != "admin":
+            user.role = "admin"
+            db.commit()
+            db.refresh(user)
 
         token = create_access_token(
             data={"sub": user.id, "email": user.email, "name": user.name}

@@ -107,6 +107,11 @@ def init_db() -> None:
                 conn.commit()
             except Exception:
                 pass
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'student'"))
+                conn.commit()
+            except Exception:
+                pass
                 
         logger.info("Database tables initialized/verified successfully.")
     except Exception as exc:
