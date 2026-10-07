@@ -49,10 +49,14 @@ export const Login: React.FC = () => {
                   navigate(from, { replace: true });
                 } catch (err: unknown) {
                   if (err && typeof err === 'object' && 'response' in err) {
-                    const axiosErr = err as { response?: { data?: { detail?: string } } };
-                    setErrorMessage(axiosErr.response?.data?.detail || 'Google authentication rejected by server.');
+                    const axiosErr = err as { response?: { status?: number; data?: { detail?: string } } };
+                    if (axiosErr.response?.status === 502 || axiosErr.response?.status === 503 || axiosErr.response?.status === 504) {
+                      setErrorMessage('The cloud server is currently waking up from idle state. Please wait a few seconds and try again.');
+                    } else {
+                      setErrorMessage(axiosErr.response?.data?.detail || 'Google authentication rejected by server.');
+                    }
                   } else {
-                    setErrorMessage('Google authentication could not reach the backend API. Please verify your backend server is running and VITE_API_BASE_URL is configured.');
+                    setErrorMessage('Could not connect to the backend server. The cloud backend may be waking up from sleep (takes ~20-30s). Please try again.');
                   }
                 } finally {
                   setIsGoogleSubmitting(false);

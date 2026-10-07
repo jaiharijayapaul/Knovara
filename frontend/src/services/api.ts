@@ -56,10 +56,19 @@ import type {
 import type { CourseAnalyticsReport } from '@/types/analytics';
 import type { AdminStats, AdminUser, AdminCourse, AdminActivity } from '@/types/admin';
 
-// Base API client configured with fallback to relative path (handled by Vite proxy in dev)
+const resolveBaseURL = (): string => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  if (import.meta.env.PROD || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'))) {
+    return 'https://knovara-backend.onrender.com/api/v1';
+  }
+  return '/api/v1';
+};
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 15000,
+  baseURL: resolveBaseURL(),
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },
