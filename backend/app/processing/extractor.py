@@ -184,30 +184,59 @@ class MultimodalExtractor:
         if not video_title:
             video_title = f"YouTube Lecture ({video_id})"
 
-        # 3. Retrieve transcript snippets
+        # 3. Retrieve transcript snippets (supporting multilingual & auto-generated captions)
         snippets: List[Dict[str, Any]] = []
+        detected_language = "en"
         try:
             api = YouTubeTranscriptApi()
             if hasattr(api, "fetch"):
                 try:
+                    # Priority 1: Check for English transcripts
                     fetched = api.fetch(video_id, languages=("en", "en-US", "en-GB"))
+                    snippets = [
+                        {"text": s.text, "start": s.start, "duration": s.duration}
+                        for s in fetched.snippets
+                    ]
                 except Exception:
+                    # Priority 2: Video is in another language (Hindi, Spanish, French, Tamil, etc.)
                     transcript_list = api.list(video_id)
-                    fetched = next(iter(transcript_list)).fetch()
-                snippets = [
-                    {"text": s.text, "start": s.start, "duration": s.duration}
-                    for s in fetched.snippets
-                ]
+                    chosen_transcript = None
+                    try:
+                        chosen_transcript = transcript_list.find_transcript(["en", "en-US", "en-GB"])
+                    except Exception:
+                        pass
+
+                    if not chosen_transcript:
+                        chosen_transcript = next(iter(transcript_list))
+
+                    detected_language = chosen_transcript.language_code
+                    logger.info(f"Extracting YouTube transcript in language: {chosen_transcript.language} ({detected_language})")
+
+                    fetched = chosen_transcript.fetch()
+                    if hasattr(fetched, "snippets"):
+                        snippets = [
+                            {"text": s.text, "start": s.start, "duration": s.duration}
+                            for s in fetched.snippets
+                        ]
+                    elif isinstance(fetched, list):
+                        snippets = [
+                            {
+                                "text": s.get("text", "") if isinstance(s, dict) else getattr(s, "text", ""),
+                                "start": s.get("start", 0.0) if isinstance(s, dict) else getattr(s, "start", 0.0),
+                                "duration": s.get("duration", 0.0) if isinstance(s, dict) else getattr(s, "duration", 0.0),
+                            }
+                            for s in fetched
+                        ]
             elif hasattr(YouTubeTranscriptApi, "get_transcript"):
                 snippets = YouTubeTranscriptApi.get_transcript(video_id)
         except Exception as e:
             logger.error(f"Error fetching YouTube transcript for video {video_id}: {e}")
             raise ValueError(
-                f"Could not retrieve captions/transcript for this YouTube video. Please ensure the video has English subtitles or auto-generated captions enabled: {e}"
+                f"Could not retrieve captions/transcript for this YouTube video. Please ensure the video has subtitles or captions enabled in any language: {e}"
             )
 
         if not snippets:
-            raise ValueError("The YouTube video has no captions or transcript available.")
+            raise ValueError("The YouTube video has no captions or transcript available in any language.")
 
         # Helper to format seconds into MM:SS or HH:MM:SS
         def format_timestamp(seconds: float) -> str:
