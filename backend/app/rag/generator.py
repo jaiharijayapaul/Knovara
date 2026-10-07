@@ -86,10 +86,11 @@ class GroundedGenerator:
             f"2. Structure your answer with clear, bite-sized bullet points or steps so it is easy to read and remember.\n"
             f"3. Base your facts strictly on the provided study material excerpts below.\n"
             f"4. Cite the exact source tags provided (e.g. {citations[0].citation_label}).\n"
-            f"5. If the uploaded material does not contain the answer, politely and simply let the student know: 'I couldn't find this specific detail in your uploaded notes. Would you like to upload more pages or ask about what is covered?'\n\n"
+            f"5. If the uploaded material does not contain the answer, politely and simply let the student know: 'I couldn't find this specific detail in your uploaded notes. Would you like to upload more pages or ask about what is covered?'\n"
+            f"6. STRICT ENGLISH REQUIREMENT: Formulate your answer, explanations, steps, and citations strictly in fluent, clear English. Even if the student's question is typed in another language or the study materials cite non-English words, always teach and answer strictly in English.\n\n"
             f"STUDY MATERIAL EXCERPTS:\n{context_str}\n\n"
             f"STUDENT QUESTION: {query}\n\n"
-            f"SIMPLE & CLEAR EXPLANATION:"
+            f"SIMPLE & CLEAR EXPLANATION (In English):"
         )
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.LLM_MODEL}:generateContent?key={api_key}"

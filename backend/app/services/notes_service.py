@@ -172,6 +172,7 @@ class NotesService:
             f"You are an expert, friendly AI Study Guide Creator for students.\n"
             f"A student uploaded their learning material: '{doc_filename}' for the course '{course_name}'.\n\n"
             f"YOUR TASK: Read the provided material text below and create comprehensive, beautifully structured AI STUDY NOTES in SIMPLE, FRIENDLY, EASY-TO-UNDERSTAND words that any student can immediately understand and learn from.\n\n"
+            f"LANGUAGE REQUIREMENT: You MUST formulate and write all study notes strictly in fluent, clear English. Even if the lecture excerpts or original document contain non-English words, translate and explain all concepts thoroughly in English.\n\n"
             f"REQUIRED STRUCTURE FOR THE NOTES:\n"
             f"# 📝 AI Study Notes: {doc_filename}\n\n"
             f"### 🎯 1. Big Picture & What This Covers\n"
@@ -187,7 +188,7 @@ class NotesService:
             f"### 🧠 6. Quick Practice Check (Self-Test)\n"
             f"(3 short self-check questions with their simple correct answers hidden or clearly labeled so students can test themselves)\n\n"
             f"MATERIAL EXCERPTS:\n{content[:8000]}\n\n"
-            f"STUDENT STUDY NOTES (Markdown format):"
+            f"STUDENT STUDY NOTES (Markdown format in English):"
         )
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.LLM_MODEL}:generateContent?key={api_key}"
@@ -213,9 +214,10 @@ class NotesService:
         prompt = (
             f"You are a friendly academic tutor.\n"
             f"Create a unified Master Study Guide for the course '{course_name}' ({subject}) based on the student's uploaded notes.\n"
+            f"LANGUAGE REQUIREMENT: Formulate the entire study guide strictly in fluent, clear English.\n"
             f"Use simple words, clear headings, bullet points, real-world analogies, and quick self-tests.\n\n"
             f"EXCERPTS:\n{content[:8000]}\n\n"
-            f"MASTER STUDY GUIDE (Markdown):"
+            f"MASTER STUDY GUIDE (Markdown in English):"
         )
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.LLM_MODEL}:generateContent?key={api_key}"
         async with httpx.AsyncClient(timeout=20.0) as client:

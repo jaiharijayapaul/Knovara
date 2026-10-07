@@ -2,10 +2,12 @@
 
 import io
 import re
+import json
 import logging
 from typing import List, Dict, Any, Tuple, Optional
 import httpx
 from youtube_transcript_api import YouTubeTranscriptApi
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +189,8 @@ class MultimodalExtractor:
         # 3. Retrieve transcript snippets (supporting multilingual & auto-generated captions)
         snippets: List[Dict[str, Any]] = []
         detected_language = "en"
+        chosen_transcript = None
+        is_natively_translated = False
         try:
             api = YouTubeTranscriptApi()
             if hasattr(api, "fetch"):
@@ -200,7 +204,6 @@ class MultimodalExtractor:
                 except Exception:
                     # Priority 2: Video is in another language (Hindi, Spanish, French, Tamil, etc.)
                     transcript_list = api.list(video_id)
-                    chosen_transcript = None
                     try:
                         chosen_transcript = transcript_list.find_transcript(["en", "en-US", "en-GB"])
                     except Exception:
@@ -212,21 +215,49 @@ class MultimodalExtractor:
                     detected_language = chosen_transcript.language_code
                     logger.info(f"Extracting YouTube transcript in language: {chosen_transcript.language} ({detected_language})")
 
-                    fetched = chosen_transcript.fetch()
-                    if hasattr(fetched, "snippets"):
-                        snippets = [
-                            {"text": s.text, "start": s.start, "duration": s.duration}
-                            for s in fetched.snippets
-                        ]
-                    elif isinstance(fetched, list):
-                        snippets = [
-                            {
-                                "text": s.get("text", "") if isinstance(s, dict) else getattr(s, "text", ""),
-                                "start": s.get("start", 0.0) if isinstance(s, dict) else getattr(s, "start", 0.0),
-                                "duration": s.get("duration", 0.0) if isinstance(s, dict) else getattr(s, "duration", 0.0),
-                            }
-                            for s in fetched
-                        ]
+                    # Attempt native YouTube English translation if available
+                    if getattr(chosen_transcript, "is_translatable", False):
+                        try:
+                            trans_obj = chosen_transcript.translate("en")
+                            trans_fetched = trans_obj.fetch()
+                            if hasattr(trans_fetched, "snippets") and trans_fetched.snippets:
+                                snippets = [
+                                    {"text": s.text, "start": s.start, "duration": s.duration}
+                                    for s in trans_fetched.snippets
+                                ]
+                                is_natively_translated = True
+                                logger.info(f"Successfully fetched native YouTube English subtitles for {video_id}")
+                            elif isinstance(trans_fetched, list) and trans_fetched:
+                                snippets = [
+                                    {
+                                        "text": s.get("text", "") if isinstance(s, dict) else getattr(s, "text", ""),
+                                        "start": s.get("start", 0.0) if isinstance(s, dict) else getattr(s, "start", 0.0),
+                                        "duration": s.get("duration", 0.0) if isinstance(s, dict) else getattr(s, "duration", 0.0),
+                                    }
+                                    for s in trans_fetched
+                                ]
+                                is_natively_translated = True
+                                logger.info(f"Successfully fetched native YouTube English subtitles for {video_id}")
+                        except Exception as native_trans_err:
+                            logger.warning(f"YouTube native translation unavailable, falling back to original language: {native_trans_err}")
+
+                    # If native YouTube translation wasn't fetched, fetch the original language transcript
+                    if not snippets:
+                        fetched = chosen_transcript.fetch()
+                        if hasattr(fetched, "snippets"):
+                            snippets = [
+                                {"text": s.text, "start": s.start, "duration": s.duration}
+                                for s in fetched.snippets
+                            ]
+                        elif isinstance(fetched, list):
+                            snippets = [
+                                {
+                                    "text": s.get("text", "") if isinstance(s, dict) else getattr(s, "text", ""),
+                                    "start": s.get("start", 0.0) if isinstance(s, dict) else getattr(s, "start", 0.0),
+                                    "duration": s.get("duration", 0.0) if isinstance(s, dict) else getattr(s, "duration", 0.0),
+                                }
+                                for s in fetched
+                            ]
             elif hasattr(YouTubeTranscriptApi, "get_transcript"):
                 snippets = YouTubeTranscriptApi.get_transcript(video_id)
         except Exception as e:
@@ -291,7 +322,87 @@ class MultimodalExtractor:
                 "timestamp_end": end_str,
             })
 
+        # 5. Multilingual Translation: If the video was non-English and not natively translated by YouTube,
+        # translate the segments into clear English using Gemini, keeping exact timestamps aligned.
+        is_foreign = bool(detected_language and not detected_language.lower().startswith("en"))
+        if is_foreign and not is_natively_translated:
+            logger.info(f"Translating {len(segments)} segments from {detected_language} to English via Gemini...")
+            segments = await cls._translate_segments_to_english(segments, detected_language)
+
+        if is_foreign or is_natively_translated:
+            if "(English Translation)" not in video_title and "(English)" not in video_title:
+                video_title = f"{video_title} (English Translation)"
+
         logger.info(
             f"Extracted {len(segments)} semantic lecture segments from YouTube video '{video_title}' ({video_id})"
         )
         return video_title, video_id, segments
+
+    @classmethod
+    async def _translate_segments_to_english(
+        cls, segments: List[Dict[str, Any]], source_language: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Translates foreign-language lecture segments into clear, fluent academic English
+        using Gemini 2.5 Flash while strictly preserving all original video timestamps.
+        """
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
+        if not api_key or len(api_key) < 10 or api_key == "mock_gemini_key_for_testing_only":
+            logger.warning("No valid Gemini API key configured for translation; retaining original segments.")
+            return segments
+
+        # Process in batches of up to 6 segments
+        batch_size = 6
+        translated_segments: List[Dict[str, Any]] = []
+
+        for i in range(0, len(segments), batch_size):
+            chunk = segments[i : i + batch_size]
+            input_texts = [s["content"] for s in chunk]
+
+            prompt = (
+                f"You are an expert academic translator.\n"
+                f"The following lecture transcript was spoken in '{source_language}'.\n"
+                f"Translate each of the following lecture segments into clear, fluent, natural academic English.\n"
+                f"Preserve all technical terms, formulas, and pedagogical explanations accurately.\n"
+                f"Return ONLY a valid JSON array of strings containing the English translations in the exact same order.\n\n"
+                f"Input segments to translate:\n"
+                f"{json.dumps(input_texts, ensure_ascii=False)}"
+            )
+
+            translated_texts = None
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.LLM_MODEL}:generateContent?key={api_key}"
+                async with httpx.AsyncClient(timeout=25.0) as client:
+                    resp = await client.post(
+                        url,
+                        json={"contents": [{"parts": [{"text": prompt}]}]},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            raw_text = candidates[0]["content"]["parts"][0]["text"].strip()
+                            if raw_text.startswith("```"):
+                                raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+                                raw_text = re.sub(r"\s*```$", "", raw_text)
+                            parsed = json.loads(raw_text.strip())
+                            if isinstance(parsed, list) and len(parsed) == len(chunk):
+                                translated_texts = parsed
+            except Exception as e:
+                logger.warning(f"Translation batch error on segments {i}-{i+len(chunk)}: {e}")
+
+            for idx, seg in enumerate(chunk):
+                seg_copy = dict(seg)
+                if (
+                    translated_texts
+                    and idx < len(translated_texts)
+                    and isinstance(translated_texts[idx], str)
+                    and translated_texts[idx].strip()
+                ):
+                    seg_copy["content"] = translated_texts[idx].strip()
+                    seg_copy["original_language"] = source_language
+                    seg_copy["is_translated"] = True
+                translated_segments.append(seg_copy)
+
+        logger.info(f"Successfully processed {len(translated_segments)} lecture segments into English.")
+        return translated_segments

@@ -145,10 +145,11 @@ class PedagogicalEngine:
             f"   - If Misconception Buster: Provide the direct answer first, and highlight a common trap students face.\n"
             f"   - If Exam Prep: Provide the direct answer first, followed by key high-yield exam takeaways.\n"
             f"   - If Deep Dive: Provide a thorough, structured breakdown of the answer.\n"
-            f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n\n"
+            f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n"
+            f"5. STRICT ENGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions strictly in clear, fluent English. Even if the student communicates in another language or the lecture originated in another language, always teach and respond in English.\n\n"
             f"GROUNDED COURSE EXCERPTS:\n{grounding_context}\n\n"
             f"STUDENT TURN: {user_message}\n\n"
-            f"TUTOR RESPONSE:"
+            f"TUTOR RESPONSE (In English):"
         )
         contents.append({"role": "user", "parts": [{"text": current_prompt}]})
 
@@ -219,10 +220,11 @@ class PedagogicalEngine:
                     f"   - If Misconception Buster: Provide the direct answer first, and highlight a common trap students face.\n"
                     f"   - If Exam Prep: Provide the direct answer first, followed by key high-yield exam takeaways.\n"
                     f"   - If Deep Dive: Provide a thorough, structured breakdown of the answer.\n"
-                    f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n\n"
+                    f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n"
+                    f"5. STRICT ENGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions strictly in clear, fluent English. Even if the student communicates in another language or the lecture originated in another language, always teach and respond in English.\n\n"
                     f"GROUNDED COURSE EXCERPTS:\n{grounding_context}\n\n"
                     f"STUDENT TURN: {user_message}\n\n"
-                    f"TUTOR RESPONSE:"
+                    f"TUTOR RESPONSE (In English):"
                 )
                 contents.append({"role": "user", "parts": [{"text": current_prompt}]})
 
