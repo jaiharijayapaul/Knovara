@@ -211,6 +211,14 @@ export const uploadMultipleDocuments = async (courseId: string, files: File[]): 
   return response.data;
 };
 
+export const ingestYouTubeLecture = async (
+  courseId: string,
+  payload: { url: string; title?: string }
+): Promise<DocumentDetail> => {
+  const response = await api.post<DocumentDetail>(`/courses/${courseId}/documents/youtube`, payload);
+  return response.data;
+};
+
 export interface DocumentNotesResponse {
   document_id: string;
   filename: string;

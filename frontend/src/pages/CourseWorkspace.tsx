@@ -7,6 +7,7 @@ import {
   fetchDocuments,
   fetchDocumentDetail,
   uploadDocument,
+  ingestYouTubeLecture,
   deleteDocument,
   queryRAG,
   indexCourseRAG,
@@ -56,6 +57,12 @@ import { AnalyticsStudio } from '@/components/analytics/AnalyticsStudio';
 import { ExamRevisionSheetModal } from '@/components/course/ExamRevisionSheetModal';
 import { AIStudyNotesModal } from '@/components/course/AIStudyNotesModal';
 
+const YouTubeIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+  </svg>
+);
+
 export const CourseWorkspace: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -91,6 +98,13 @@ export const CourseWorkspace: React.FC = () => {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
   const [synthesisMessage, setSynthesisMessage] = useState<string | null>(null);
+
+  // YouTube Lecture Ingestion state
+  const [showYouTubeModal, setShowYouTubeModal] = useState<boolean>(false);
+  const [youtubeUrl, setYoutubeUrl] = useState<string>('');
+  const [youtubeTitle, setYoutubeTitle] = useState<string>('');
+  const [isIngestingYouTube, setIsIngestingYouTube] = useState<boolean>(false);
+  const [youtubeError, setYoutubeError] = useState<string | null>(null);
 
   // AI Study Notes modal state
   const [showNotesModal, setShowNotesModal] = useState<boolean>(false);
@@ -253,6 +267,36 @@ export const CourseWorkspace: React.FC = () => {
     }
   };
 
+  const handleYouTubeIngest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !youtubeUrl.trim()) return;
+    setIsIngestingYouTube(true);
+    setYoutubeError(null);
+    try {
+      const doc = await ingestYouTubeLecture(id, {
+        url: youtubeUrl.trim(),
+        title: youtubeTitle.trim() || undefined,
+      });
+      setUploadSuccess(`Successfully ingested YouTube lecture "${doc.filename}"! Extracted ${doc.chunks_count} semantic timestamp units.`);
+      setShowYouTubeModal(false);
+      setYoutubeUrl('');
+      setYoutubeTitle('');
+      await loadDocuments();
+      await loadCourse();
+      await loadRAGStatus();
+      if (doc.chunks_count > 0) {
+        setSynthesisMessage(`YouTube lecture "${doc.filename}" successfully transcribed and indexed. Click "⚡ Synthesize from Uploads" to update topics and flashcards!`);
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail 
+        || (err as Error)?.message 
+        || 'Failed to ingest YouTube video. Please ensure the video URL is valid and has captions/transcripts enabled.';
+      setYoutubeError(msg);
+    } finally {
+      setIsIngestingYouTube(false);
+    }
+  };
+
   const handleInspectDoc = async (docId: string) => {
     if (!id) return;
     setInspectingDocId(docId);
@@ -354,7 +398,10 @@ export const CourseWorkspace: React.FC = () => {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
-  const getFileTypeIcon = (type: FileType) => {
+  const getFileTypeIcon = (type: FileType, filename?: string) => {
+    if (filename?.toLowerCase().includes('youtube') || filename?.startsWith('YouTube:')) {
+      return <YouTubeIcon className="w-4 h-4 text-rose-500" />;
+    }
     switch (type) {
       case 'pdf':
         return <FileText className="w-4 h-4 text-rose-400" />;
@@ -917,7 +964,7 @@ export const CourseWorkspace: React.FC = () => {
                           </div>
 
                           <div className="flex items-center space-x-2 text-xs text-slate-400">
-                            {getFileTypeIcon(cite.file_type)}
+                            {getFileTypeIcon(cite.file_type, cite.document_name)}
                             <span className="truncate max-w-[200px]">{cite.document_name}</span>
                             <span>&bull;</span>
                             {cite.page_number && <span className="text-rose-300 font-semibold">Page {cite.page_number}</span>}
@@ -995,6 +1042,9 @@ export const CourseWorkspace: React.FC = () => {
                 <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
                   <Presentation className="w-5 h-5" />
                 </div>
+                <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
+                  <YouTubeIcon className="w-5 h-5" />
+                </div>
                 <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
                   <Video className="w-5 h-5" />
                 </div>
@@ -1010,6 +1060,19 @@ export const CourseWorkspace: React.FC = () => {
                 <p className="text-xs text-slate-400 max-w-lg mx-auto">
                   Supports PDF textbooks, PowerPoint slides (.pptx), Word/Text notes, or audio/video files. <strong>Multiple select enabled:</strong> you can select and upload multiple files together!
                 </p>
+                <div className="pt-2 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowYouTubeModal(true);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/25 text-xs font-semibold inline-flex items-center space-x-1.5 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                  >
+                    <YouTubeIcon className="w-3.5 h-3.5 text-red-400" />
+                    <span>Have a YouTube lecture? Ingest by URL &rarr;</span>
+                  </button>
+                </div>
               </div>
 
               {isUploading && (
@@ -1117,6 +1180,15 @@ export const CourseWorkspace: React.FC = () => {
 
                 <div className="flex items-center space-x-2">
                   <button
+                    onClick={() => setShowYouTubeModal(true)}
+                    className="px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 hover:text-red-200 text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer shadow-sm"
+                    title="Ingest YouTube lecture video with timestamped transcript citations"
+                  >
+                    <YouTubeIcon className="w-3.5 h-3.5 text-red-400" />
+                    <span>🎥 Ingest YouTube</span>
+                  </button>
+
+                  <button
                     onClick={handleSynthesizeMaterials}
                     disabled={isSynthesizing || documents.length === 0}
                     className="px-3.5 py-2 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 text-teal-300 hover:text-teal-200 text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer disabled:opacity-40"
@@ -1152,7 +1224,7 @@ export const CourseWorkspace: React.FC = () => {
                   </div>
                   <h4 className="text-sm font-semibold text-slate-300">No Learning Materials Uploaded Yet</h4>
                   <p className="text-xs text-slate-500 max-w-md mx-auto">
-                    Upload your course lecture slides (.pptx), textbook chapters (.pdf), or video lecture transcripts (.mp4, .vtt, .srt) in the dropzone above to begin indexing.
+                    Upload your course lecture slides (.pptx), textbook chapters (.pdf), or paste a YouTube lecture URL in the dropzone above to begin indexing.
                   </p>
                 </div>
               ) : (
@@ -1164,7 +1236,7 @@ export const CourseWorkspace: React.FC = () => {
                     >
                       <div className="flex items-center space-x-3 min-w-0">
                         <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center shrink-0">
-                          {getFileTypeIcon(doc.file_type)}
+                          {getFileTypeIcon(doc.file_type, doc.filename)}
                         </div>
                         <div className="min-w-0 space-y-1">
                           <div className="flex items-center space-x-2">
@@ -1383,7 +1455,7 @@ export const CourseWorkspace: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center space-x-3">
                 <div className="p-2.5 rounded-xl bg-slate-800 border border-slate-700">
-                  {getFileTypeIcon(selectedCitation.file_type)}
+                  {getFileTypeIcon(selectedCitation.file_type, selectedCitation.document_name)}
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-white">
@@ -1479,7 +1551,7 @@ export const CourseWorkspace: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center space-x-3">
                 <div className="p-2.5 rounded-xl bg-slate-800 border border-slate-700">
-                  {getFileTypeIcon(selectedDoc.file_type)}
+                  {getFileTypeIcon(selectedDoc.file_type, selectedDoc.filename)}
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-white truncate max-w-md">
@@ -1647,6 +1719,119 @@ export const CourseWorkspace: React.FC = () => {
             setActiveTab('tutor');
           }}
         />
+      )}
+
+      {/* YouTube Lecture Ingestion Modal */}
+      {showYouTubeModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-500/15 border border-red-500/25 flex items-center justify-center text-red-400">
+                  <YouTubeIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Ingest YouTube Lecture</h3>
+                  <p className="text-xs text-slate-400">Extract timestamped transcripts & vector embeddings</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isIngestingYouTube) {
+                    setShowYouTubeModal(false);
+                    setYoutubeError(null);
+                  }
+                }}
+                className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {youtubeError && (
+              <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 flex items-start space-x-2.5 text-xs text-red-300">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 leading-relaxed">{youtubeError}</div>
+              </div>
+            )}
+
+            <form onSubmit={handleYouTubeIngest} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  YouTube Video URL <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/80 transition-all font-mono"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Paste any lecture, seminar, or educational video link with English captions or transcripts enabled.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Custom Lecture Title <span className="text-slate-500 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={youtubeTitle}
+                  onChange={(e) => setYoutubeTitle(e.target.value)}
+                  placeholder="Leave blank to automatically fetch the official video title"
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/80 transition-all"
+                />
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-1.5 text-[11px] text-slate-400">
+                <div className="flex items-center space-x-1.5 text-slate-300 font-semibold">
+                  <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+                  <span>What happens during ingestion?</span>
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                  <li>Captions are fetched and divided into semantic conceptual lecture segments.</li>
+                  <li>Each unit is indexed with precise timestamp ranges (e.g. <span className="text-sky-300 font-mono">[YouTube: 14:20-15:45]</span>).</li>
+                  <li>Vector embeddings are created for grounded citations in the AI Tutor and practice quizzes.</li>
+                </ul>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  disabled={isIngestingYouTube}
+                  onClick={() => {
+                    setShowYouTubeModal(false);
+                    setYoutubeError(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isIngestingYouTube || !youtubeUrl.trim()}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-red-400 to-amber-400 hover:from-red-300 hover:to-amber-300 disabled:opacity-50 transition-all flex items-center space-x-2 cursor-pointer shadow-lg shadow-red-500/10"
+                >
+                  {isIngestingYouTube ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Transcribing & Embedding...</span>
+                    </>
+                  ) : (
+                    <>
+                      <YouTubeIcon className="w-3.5 h-3.5 text-slate-950" />
+                      <span>Ingest & Generate Citations</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Footer */}

@@ -13,6 +13,7 @@ from app.schemas.document import (
     DocumentChunkResponse,
 )
 from app.processing.pipeline import ProcessingPipeline
+from app.processing.extractor import MultimodalExtractor
 from app.models.document import Document, DocumentChunk
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,73 @@ class DocumentService:
             db=db,
             document=doc,
             file_bytes=file_bytes,
+            course_topics=course_topics,
+        )
+
+        chunks = [DocumentChunkResponse.model_validate(c) for c in processed_doc.chunks]
+        return DocumentDetailResponse(
+            id=processed_doc.id,
+            course_id=processed_doc.course_id,
+            filename=processed_doc.filename,
+            file_type=processed_doc.file_type,
+            file_size=processed_doc.file_size,
+            processing_status=processed_doc.processing_status,
+            processing_error=processed_doc.processing_error,
+            chunks_count=len(chunks),
+            created_at=processed_doc.created_at,
+            updated_at=processed_doc.updated_at,
+            chunks=chunks,
+        )
+
+    @classmethod
+    async def process_youtube_ingest(
+        cls,
+        db: Session,
+        course_id: str,
+        user_id: str,
+        url: str,
+        custom_title: Optional[str] = None,
+    ) -> DocumentDetailResponse:
+        """Fetch YouTube video transcript, metadata, chunk semantics, and embed in knowledge base."""
+        course = cls._verify_course_ownership(db, course_id, user_id)
+        course_topics = [t.name for t in course.topics]
+
+        try:
+            video_title, video_id, extracted_units = await MultimodalExtractor.extract_youtube(
+                url=url, custom_title=custom_title
+            )
+        except Exception as e:
+            logger.error(f"YouTube ingestion failed for url {url}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to ingest YouTube video: {str(e)}",
+            )
+
+        if not extracted_units:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No transcript snippets could be extracted from this YouTube video. Captions or transcripts may be disabled.",
+            )
+
+        doc_filename = f"YouTube: {video_title}"[:180]
+        total_size = sum(len(u.get("content", "")) for u in extracted_units)
+        storage_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        # Create document record
+        doc = DocumentRepository.create(
+            db=db,
+            course_id=course_id,
+            filename=doc_filename,
+            file_type="video",
+            storage_url=storage_url,
+            file_size=total_size,
+        )
+
+        # Process extracted units directly through chunking, embedding, topic extraction, and AI study notes
+        processed_doc = ProcessingPipeline.execute_extracted_units(
+            db=db,
+            document=doc,
+            extracted_units=extracted_units,
             course_topics=course_topics,
         )
 

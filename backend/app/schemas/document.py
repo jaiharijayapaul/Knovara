@@ -41,3 +41,9 @@ class DocumentDetailResponse(DocumentResponse):
     chunks: List[DocumentChunkResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class YouTubeIngestRequest(BaseModel):
+    """Payload for ingesting a YouTube video into course knowledge base."""
+    url: str = Field(..., min_length=5, description="YouTube video or lecture URL")
+    title: Optional[str] = Field(None, description="Optional custom lecture title override")

@@ -46,6 +46,40 @@ class ProcessingPipeline:
             if not extracted_units:
                 raise ValueError("No readable text or content could be extracted from this file.")
 
+            return cls.execute_extracted_units(
+                db=db,
+                document=document,
+                extracted_units=extracted_units,
+                course_topics=course_topics,
+            )
+
+        except Exception as e:
+            logger.exception(f"Pipeline failure for document {document.id} ({document.filename}): {e}")
+            db.rollback()
+            document.processing_status = "FAILED"
+            document.processing_error = str(e)
+            db.commit()
+            db.refresh(document)
+            return document
+
+    @classmethod
+    def execute_extracted_units(
+        cls,
+        db: Session,
+        document: Document,
+        extracted_units: List[dict],
+        course_topics: Optional[List[str]] = None,
+    ) -> Document:
+        """
+        Execute chunking, embedding, topic extraction, and persistence for pre-extracted units
+        (e.g., from YouTube lecture transcript ingestion or speech-to-text models).
+        """
+        document.processing_status = "PROCESSING"
+        document.processing_error = None
+        db.commit()
+        db.refresh(document)
+
+        try:
             # If course has no curriculum topics yet, automatically discover them from the uploaded content
             if not course_topics:
                 try:
@@ -72,9 +106,9 @@ class ProcessingPipeline:
                                 for t_name in course_topics:
                                     MasteryRepository.get_or_create(db, course.user_id, document.course_id, t_name)
                                 db.commit()
-                        logger.info(f"Auto-extracted {len(added_names)} curriculum topics for course {document.course_id} on file upload.")
+                        logger.info(f"Auto-extracted {len(added_names)} curriculum topics for course {document.course_id}.")
                 except Exception as ex:
-                    logger.warning(f"Auto topic discovery during upload note: {ex}")
+                    logger.warning(f"Auto topic discovery during pipeline note: {ex}")
 
             # 2. Semantic Chunking & Citation Alignment Phase
             chunks_data = SemanticChunker.chunk_extracted_units(

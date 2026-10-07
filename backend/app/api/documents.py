@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.document import (
     DocumentResponse,
     DocumentDetailResponse,
+    YouTubeIngestRequest,
 )
 from app.services.document_service import DocumentService
 
@@ -83,6 +84,29 @@ async def upload_multiple_documents(
         )
         results.append(doc)
     return results
+
+
+@router.post(
+    "/youtube",
+    response_model=DocumentDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ingest YouTube lecture video transcript and semantic units",
+    description="Accepts a YouTube URL, retrieves the lecture transcript and video metadata, extracts semantic units with timestamp citations, and generates vector embeddings.",
+)
+async def ingest_youtube_video(
+    course_id: str,
+    payload: YouTubeIngestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ingest a YouTube video lecture directly into course workspace knowledge base."""
+    return await DocumentService.process_youtube_ingest(
+        db=db,
+        course_id=course_id,
+        user_id=current_user.id,
+        url=payload.url,
+        custom_title=payload.title,
+    )
 
 
 @router.post(

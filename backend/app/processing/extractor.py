@@ -3,7 +3,9 @@
 import io
 import re
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple, Optional
+import httpx
+from youtube_transcript_api import YouTubeTranscriptApi
 
 logger = logging.getLogger(__name__)
 
@@ -141,3 +143,126 @@ class MultimodalExtractor:
             "timestamp_start": None,
             "timestamp_end": None,
         }]
+
+    @classmethod
+    async def extract_youtube(
+        cls, url: str, custom_title: Optional[str] = None
+    ) -> Tuple[str, str, List[Dict[str, Any]]]:
+        """
+        Extract video title, video ID, and timestamped speech segments from a YouTube lecture video.
+        Returns: (video_title, video_id, extracted_segments)
+        """
+        # 1. Extract 11-char video ID from YouTube URL formats
+        patterns = [
+            r"(?:v=|\/|youtu\.be\/|embed\/|live\/|shorts\/)([a-zA-Z0-9_-]{11})",
+        ]
+        video_id = None
+        for p in patterns:
+            match = re.search(p, url)
+            if match:
+                video_id = match.group(1)
+                break
+
+        if not video_id:
+            raise ValueError(
+                "Invalid YouTube URL. Please provide a valid YouTube link (e.g., https://www.youtube.com/watch?v=... or https://youtu.be/...)."
+            )
+
+        # 2. Fetch video title via official YouTube oEmbed API
+        video_title = custom_title
+        if not video_title:
+            try:
+                oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(oembed_url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        video_title = data.get("title")
+            except Exception as e:
+                logger.warning(f"Could not fetch YouTube title from oembed: {e}")
+
+        if not video_title:
+            video_title = f"YouTube Lecture ({video_id})"
+
+        # 3. Retrieve transcript snippets
+        snippets: List[Dict[str, Any]] = []
+        try:
+            api = YouTubeTranscriptApi()
+            if hasattr(api, "fetch"):
+                try:
+                    fetched = api.fetch(video_id, languages=("en", "en-US", "en-GB"))
+                except Exception:
+                    transcript_list = api.list(video_id)
+                    fetched = next(iter(transcript_list)).fetch()
+                snippets = [
+                    {"text": s.text, "start": s.start, "duration": s.duration}
+                    for s in fetched.snippets
+                ]
+            elif hasattr(YouTubeTranscriptApi, "get_transcript"):
+                snippets = YouTubeTranscriptApi.get_transcript(video_id)
+        except Exception as e:
+            logger.error(f"Error fetching YouTube transcript for video {video_id}: {e}")
+            raise ValueError(
+                f"Could not retrieve captions/transcript for this YouTube video. Please ensure the video has English subtitles or auto-generated captions enabled: {e}"
+            )
+
+        if not snippets:
+            raise ValueError("The YouTube video has no captions or transcript available.")
+
+        # Helper to format seconds into MM:SS or HH:MM:SS
+        def format_timestamp(seconds: float) -> str:
+            s = int(seconds)
+            m, s = divmod(s, 60)
+            h, m = divmod(m, 60)
+            if h > 0:
+                return f"{h:02d}:{m:02d}:{s:02d}"
+            return f"{m:02d}:{s:02d}"
+
+        # 4. Group fine-grained subtitle snippets into cohesive pedagogical lecture segments (~45-75 seconds each)
+        segments = []
+        current_texts = []
+        group_start = snippets[0]["start"]
+        group_end = group_start
+
+        for snip in snippets:
+            text = snip.get("text", "").strip()
+            if not text:
+                continue
+            current_texts.append(text)
+            snip_end = snip.get("start", 0.0) + snip.get("duration", 0.0)
+            group_end = max(group_end, snip_end)
+
+            word_count = sum(len(t.split()) for t in current_texts)
+            time_span = group_end - group_start
+
+            if word_count >= 100 or time_span >= 50.0:
+                combined_content = " ".join(current_texts)
+                start_str = format_timestamp(group_start)
+                end_str = format_timestamp(group_end)
+                segments.append({
+                    "content": combined_content,
+                    "page_number": None,
+                    "slide_number": None,
+                    "timestamp_start": start_str,
+                    "timestamp_end": end_str,
+                })
+                current_texts = []
+                group_start = snip_end
+                group_end = group_start
+
+        if current_texts:
+            combined_content = " ".join(current_texts)
+            start_str = format_timestamp(group_start)
+            end_str = format_timestamp(group_end)
+            segments.append({
+                "content": combined_content,
+                "page_number": None,
+                "slide_number": None,
+                "timestamp_start": start_str,
+                "timestamp_end": end_str,
+            })
+
+        logger.info(
+            f"Extracted {len(segments)} semantic lecture segments from YouTube video '{video_title}' ({video_id})"
+        )
+        return video_title, video_id, segments
