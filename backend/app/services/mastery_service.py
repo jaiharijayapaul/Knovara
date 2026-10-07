@@ -9,7 +9,15 @@ from typing import List
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from app.bkt import BKTEngine, BKTParams
+from app.bkt import (
+    BKTEngine,
+    BKTParams,
+    DEFAULT_P_KNOW,
+    DEFAULT_P_LEARN,
+    DEFAULT_P_GUESS,
+    DEFAULT_P_SLIP,
+    MASTERY_THRESHOLD,
+)
 from app.models.assessment import AssessmentAttempt, QuestionResponseLog
 from app.models.mastery import LearnerConceptMastery
 from app.models.course import Course
@@ -189,6 +197,39 @@ class MasteryService:
         )
 
         concepts = [_serialize_record(r) for r in records]
+        existing_labels = {c.concept_label.lower().strip() for c in concepts}
+
+        # Seamlessly include course topics that have not yet had assessment attempts
+        course = db.query(Course).filter_by(id=course_id, user_id=user_id).first()
+        if course and course.topics:
+            for t in course.topics:
+                norm = t.name.strip().lower()
+                if norm not in existing_labels:
+                    concepts.append(
+                        ConceptMasteryResponse(
+                            id=f"topic-{t.id}",
+                            user_id=user_id,
+                            course_id=course_id,
+                            concept_label=t.name.strip(),
+                            p_know=DEFAULT_P_KNOW,
+                            p_learn=DEFAULT_P_LEARN,
+                            p_guess=DEFAULT_P_GUESS,
+                            p_slip=DEFAULT_P_SLIP,
+                            mastery_threshold=MASTERY_THRESHOLD,
+                            total_attempts=0,
+                            correct_attempts=0,
+                            is_mastered=False,
+                            priority_score=0.30,
+                            p_know_history=[DEFAULT_P_KNOW],
+                            mastery_percentage=round(DEFAULT_P_KNOW * 100, 1),
+                            accuracy_rate=0.0,
+                            mastery_status="not_started",
+                            last_updated=t.created_at,
+                            created_at=t.created_at,
+                        )
+                    )
+                    existing_labels.add(norm)
+
         total = len(concepts)
         mastered = sum(1 for c in concepts if c.is_mastered)
 

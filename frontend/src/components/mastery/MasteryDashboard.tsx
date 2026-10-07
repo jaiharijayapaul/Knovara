@@ -506,7 +506,7 @@ export function MasteryDashboard({
       console.error('Failed to create remediation session for concept:', err);
     }
   };
-  const [activeTab, setActiveTab] = useState<'concepts' | 'mindmap' | 'recommendations'>('concepts');
+  const [activeTab, setActiveTab] = useState<'concepts' | 'mindmap' | 'recommendations'>('mindmap');
   const [statusFilter, setStatusFilter] = useState<MasteryStatus | 'all'>('all');
   const [generatingExam, setGeneratingExam] = useState(false);
   const [practicingConcept, setPracticingConcept] = useState<string | null>(null);
@@ -755,8 +755,8 @@ export function MasteryDashboard({
         borderRadius: 12, padding: 4,
       }}>
         {[
+          { id: 'mindmap', label: `🕸️ Knowledge Mastery Graph (Visual BKT) (${mastery.total_concepts})` },
           { id: 'concepts', label: `📊 Concept Cards (${mastery.total_concepts})` },
-          { id: 'mindmap', label: `🕸️ Interactive Mind Map (${mastery.total_concepts})` },
           { id: 'recommendations', label: `🎯 Recommended Practice (${recommendations?.recommendations.length ?? 0})` },
         ].map(tab => (
           <button
