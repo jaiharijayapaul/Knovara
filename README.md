@@ -1,146 +1,351 @@
-# 🎓 Knovara — Personalized AI Tutoring & Adaptive Learning Platform
+# 🎓 Knovara — Adaptive AI Tutoring & Multimodal Learning Platform
 
-> **AI-Powered Learning Platform with Multimodal Ingestion, Multilingual YouTube Translation, Socratic AI Tutoring, and Bayesian Knowledge Tracing.**
+<div align="center">
 
-[![Live Web App](https://img.shields.io/badge/Frontend-Vercel%20Production-teal?logo=vercel)](https://knovara-beta.vercel.app)
-[![API Backend](https://img.shields.io/badge/Backend-Render%20Production-blue?logo=render)](https://knovara-backend.onrender.com/health)
-[![Database](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-green?logo=supabase)](https://supabase.com)
-[![AI Engine](https://img.shields.io/badge/LLM-Gemini%202.5%20Flash-orange?logo=google)](https://ai.google.dev/)
+```
+  _  ___   _  _____  __     __     _     ____      _    
+ | |/ / \ | |/ _ \ \/ / /\  \ \   / /   |  _ \    / \   
+ | ' /|  \| | | | \  / /  \  \ \ / /    | |_) |  / _ \  
+ | . \| |\  | |_| /  \/ /\ \  \ V /     |  _ <  / ___ \ 
+ |_|\_\_| \_|\___/_/\_/_/  \_\ \_/      |_| \_\/_/   \_\
+```
 
----
+### *Transforming Textbooks, Slides & Multilingual Lectures into an Interactive, Source-Grounded Cognitive Tutor*
 
-## 🌟 Platform Highlights & Key Features
+[![Live Web Application](https://img.shields.io/badge/🚀_Live_App-knovara--beta.vercel.app-00dfa2?style=for-the-badge&logo=vercel&logoColor=white)](https://knovara-beta.vercel.app)
+[![API Backend Health](https://img.shields.io/badge/⚡_API_Status-Online-3b82f6?style=for-the-badge&logo=render&logoColor=white)](https://knovara-backend.onrender.com/health)
+[![Database](https://img.shields.io/badge/🗄️_Database-Supabase_PostgreSQL-3ecf8e?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
+[![AI Engine](https://img.shields.io/badge/🧠_LLM-Gemini_2.5_Flash-f59e0b?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 
-### 1. 🎥 Multilingual YouTube Lecture Ingestion & Auto-Translation
-- **Paste Any YouTube Link**: Ingest lecture videos, webinars, or tutorials directly by pasting URLs (`https://youtube.com/watch?v=...` or `https://youtu.be/...`).
-- **Multilingual Support**: Supports lectures recorded in any language (English, Hindi, Spanish, French, German, Tamil, Japanese, etc.).
-- **Automatic English Translation**: Non-English transcripts are automatically translated into clear, academic English via Google Gemini 2.5 Flash.
-- **Exact Video Timestamps**: Timestamps (e.g. `[YouTube: 04:22 - 05:40]`) are preserved and aligned with translated segments.
-- **1-Click Video Jumping**: Clicking any timestamp badge in chat or notes immediately jumps to that exact second in the YouTube video.
+<p align="center">
+  <a href="#-quick-navigation"><b>Quick Navigation</b></a> •
+  <a href="#-the-adaptive-learning-loop"><b>The Cognitive Loop</b></a> •
+  <a href="#-interactive-feature-tour"><b>Feature Tour</b></a> •
+  <a href="#-mathematical-foundation"><b>Math & Algorithms</b></a> •
+  <a href="#-system-architecture"><b>Architecture</b></a> •
+  <a href="#-quickstart-guide"><b>Quickstart</b></a>
+</p>
 
-### 2. 📝 1-Click AI Study Notes & Master Course Guides
-- **Structured Study Notes**: In 1 click, synthesize comprehensive, beautifully structured study notes from any uploaded PDF, PPTX, or YouTube lecture.
-- **Pedagogical Structure**: Notes include:
-  1. *Big Picture & Core Purpose*
-  2. *Core Concepts Explained with Real-World Analogies*
-  3. *Key Facts, Rules & Formulas*
-  4. *High-Yield Exam Takeaways*
-  5. *Common Student Traps & Misconceptions*
-  6. *Quick Practice Check (Self-Test)*
-- **Master Course Guide**: Merge all chapters and video lectures in a course into one unified exam preparation master guide.
-- **Strictly in English**: All synthesized notes and explanations are formulated in fluent, crystal-clear English.
-
-### 3. 🤖 Socratic AI Tutor with 7 Teaching Styles
-- **Source-Grounded Citations**: The AI tutor provides factual answers backed by exact page numbers, slide numbers, or YouTube timestamp citations.
-- **7 Pedagogical Modes**:
-  - `Guided Thinking (Socratic)`: Gives the direct answer first, followed by an encouraging question to spark reflection.
-  - `Everyday Analogy`: Explains abstract math or science concepts using intuitive, everyday real-world examples.
-  - `Step-by-Step Guide`: Breaks complex algorithms or formulas into small, easy-to-follow steps.
-  - `Mistake Buster`: Warns against common exam traps and shows how to remember correctly.
-  - `Exam Prep`: Highlights the high-yield formulas and concepts most likely to be tested.
-  - `Deep Dive`: In-depth breakdown with theoretical background and industrial applications.
-  - `Quick 30-Sec Summary`: Fast 3-point recap right before class or exams.
-- **Strict English Language Enforcement**: Always responds in fluent English, even if the student types their question in another language.
-
-### 4. 🧠 Bayesian Knowledge Tracing (BKT) & Adaptive Quizzes
-- **Latent Mastery Modeling**: Continuously computes latent concept mastery $P(L_t)$ from student responses:
-  - $P(L_0)$: Initial prior mastery.
-  - $P(T)$: Transition probability of learning during practice.
-  - $P(G)$: Guess parameter to filter out lucky guesses.
-  - $P(S)$: Slip parameter to protect against careless mistakes.
-- **Adaptive Question Blueprints**: Automatically generates quiz questions focusing on the student's weakest topics.
-- **Misconception Feedback**: Explains why incorrect options were wrong and how to correct the underlying misconception.
-- **Timed Mock Exams**: Realistic exam countdown clock with question palette and review flagging.
-
-### 5. 🗂️ Spaced Repetition Flashcards (SuperMemo SM-2)
-- Automatically generated high-yield recall flashcards from syllabus concepts.
-- Optimal review intervals computed using the SM-2 algorithm based on student recall ratings (*Again, Hard, Good, Easy*).
-
-### 6. 🗺️ Concept Mind Map & 1-Page Exam Revision Sheet
-- **Interactive Mind Map**: Visual network graph color-coded by mastery (Green = Mastered, Yellow = Learning, Red = Needs Practice).
-- **Printable Revision Sheet**: 1-click clean white printable summary sheet optimized for final exam review.
-
-### 7. 🛡️ Admin Command Center & Role-Based Access Control (`/admin`)
-- **Institutional Management**: Dedicated dashboard for educators and platform administrators.
-- **User Management & RBAC**: View all users, search profiles, and assign roles (`student`, `instructor`, `admin`).
-- **Course & Document Audits**: Inspect courses, files, chunks, and quiz generations across the institution.
-- **Live Infrastructure Monitoring**: Real-time status for PostgreSQL, Gemini API, and server latency.
+</div>
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+> [!NOTE]
+> **Track D: Personalized Tutoring & Adaptive Learning**  
+> Knovara solves textbook fatigue and passive video watching by combining **multimodal syllabus ingestion (PDF, PPTX, YouTube)**, **real-time multilingual translation into English**, **Socratic AI dialogue**, and **Bayesian Knowledge Tracing (BKT)** to track true student mastery.
 
-```text
-┌────────────────────────────────────────────────────────┐
-│                   Frontend (Vercel)                    │
-│   React 19 + TypeScript + Vite + Tailwind CSS + Lucide │
-└──────────────────────────┬─────────────────────────────┘
-                           │ HTTPS / JSON API
-┌──────────────────────────▼─────────────────────────────┐
-│                   Backend (Render)                     │
-│    FastAPI + SQLAlchemy + Pydantic + Uvicorn           │
-└──────────────┬──────────────────────────┬──────────────┘
-               │                          │
-┌──────────────▼─────────────┐   ┌────────▼──────────────┐
-│   Database (Supabase)      │   │     AI / LLM API      │
-│ PostgreSQL + pgvector RAG  │   │ Google Gemini 2.5     │
-└────────────────────────────┘   └───────────────────────┘
+---
+
+## 🧭 Quick Navigation
+
+| Section | Description | Quick Link |
+| :--- | :--- | :--- |
+| **🔄 The Cognitive Loop** | Visual workflow of ingestion, RAG, and assessment | [Jump to Loop](#-the-adaptive-learning-loop) |
+| **✨ Interactive Feature Tour** | Expandable details for YouTube, Notes, Tutor, Quizzes | [Explore Features](#-interactive-feature-tour) |
+| **🧮 Mathematical Foundations** | BKT probability formulas & SuperMemo SM-2 equations | [View Math](#-mathematical-foundation) |
+| **⚖️ Competitive Comparison** | How Knovara compares to generic ChatGPT & Quizlet | [Compare Platforms](#-how-knovara-compares) |
+| **🏗️ Architecture & Stack** | Distributed architecture across Vercel, Render & Supabase | [Inspect Tech Stack](#-system-architecture) |
+| **🛡️ Admin Command Center** | Institution RBAC and system management (`/admin`) | [Review Admin Hub](#-admin-command-center--rbac) |
+| **🛠️ Local Setup & Deploy** | 2-minute setup instructions for local development | [Run Locally](#-quickstart-guide) |
+
+---
+
+## 🔄 The Adaptive Learning Loop
+
+```mermaid
+flowchart TD
+    subgraph INGESTION["1. Multimodal Syllabus Ingestion"]
+        A1["📄 PDF Textbooks"] --> A4["Vector Chunker & Embedder"]
+        A2["📊 PPTX Slide Decks"] --> A4
+        A3["🎥 YouTube Lecture URLs\n(Hindi, Spanish, Tamil, French, etc.)"] --> T1["🌐 Gemini 2.5 Flash\nAuto-Translator to English"]
+        T1 --> A4
+    end
+
+    subgraph KNOWLEDGE["2. Grounded Knowledge Engine"]
+        A4 --> B1[("🗄️ Supabase pgvector\nSemantic Knowledge Base")]
+        B1 --> B2["🔍 Hybrid RAG Pipeline\n(Vector Similarity + BM25 Lexical)"]
+    end
+
+    subgraph INTERACTION["3. Personalized Cognitive Tutoring"]
+        B2 --> C1["🤖 Socratic AI Tutor\n(7 Teaching Modes + English Enforcement)"]
+        B2 --> C2["📝 1-Click AI Study Notes\n& Master Exam Guides"]
+        B2 --> C3["🗂️ SuperMemo SM-2\nSpaced Flashcards"]
+    end
+
+    subgraph ADAPTIVITY["4. Continuous Mastery Tracing"]
+        C1 & C3 --> D1["🎯 Adaptive Practice Quizzes\n& Timed Mock Exams"]
+        D1 --> D2["📊 Bayesian Knowledge Tracing (BKT)\nP(L_t) Latent Mastery Update"]
+        D2 -->|Identified Weak Topics| B2
+        D2 --> D3["🗺️ Concept Mind Map\n& 1-Page Exam Revision Sheet"]
+    end
+
+    style T1 fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#fff
+    style B1 fill:#1e293b,stroke:#0ea5e9,stroke-width:2px,color:#fff
+    style D2 fill:#4c1d95,stroke:#a855f7,stroke-width:2px,color:#fff
 ```
 
 ---
 
-## 🚀 Step-by-Step User Guide
+## ✨ Interactive Feature Tour
 
-### For Students:
-1. **Sign In**: Sign in using your email/password or with **1-Click Google Sign-In**.
-2. **Create a Course Workspace**: Click "Create New Subject" (e.g., *Machine Learning*, *Biology*, *Data Structures*).
-3. **Upload Material or Paste YouTube Video**:
-   - Upload PDF textbooks, PowerPoint slides, or notes.
-   - Paste any YouTube lecture URL (in English, Hindi, Spanish, Tamil, French, etc.). The system automatically translates foreign lectures to English!
-4. **Generate AI Study Notes**: Click "Generate AI Study Notes" on any document to get a complete study guide.
-5. **Chat with AI Tutor**: Ask questions in the "Ask AI Tutor" tab and choose your preferred teaching mode.
-6. **Practice Flashcards & Quizzes**: Review flashcards using spaced repetition and take adaptive mock exams to boost your BKT mastery scores.
+<details open>
+<summary><b>🎥 1. Multilingual YouTube Lecture Ingestion & Auto-Translation</b> <i>(Click to collapse/expand)</i></summary>
 
-### For Instructors & Admins:
-1. Access the **Admin Command Center** at [`/admin`](https://knovara-beta.vercel.app/admin).
-2. Manage student accounts, adjust user roles (`student`, `instructor`, `admin`), and inspect course materials.
-3. Monitor server latency and database connection pool health.
+<br/>
+
+- **Direct URL Pasting**: Paste any educational YouTube link (`https://youtube.com/watch?v=...` or `https://youtu.be/...`) right into your course dropzone.
+- **Any Spoken Language**: Supports lectures delivered in **Hindi, Spanish, French, German, Tamil, Japanese, Portuguese**, and more.
+- **Automatic English Translation**: Non-English transcripts are dynamically translated into clear, fluent, academic English using Google Gemini 2.5 Flash.
+- **Exact Timestamp Retention**: The translated English text stays strictly synchronized with original video time offsets (e.g. `[YouTube: 04:22 - 05:40]`).
+- **1-Click Video Jumping**: Clicking any timestamp citation in the tutor chat or study notes immediately opens YouTube at that exact second.
+
+> [!TIP]
+> Try pasting a multilingual lecture! The system automatically detects the spoken language, extracts the audio captions, translates them to English, and adds `(English Translation)` to the indexed document title.
+
+</details>
 
 ---
 
-## 🛠️ Local Development Setup
+<details>
+<summary><b>📝 2. 1-Click AI Study Notes & Master Course Guides</b> <i>(Click to expand)</i></summary>
+
+<br/>
+
+Turn dense 80-page PDFs or 2-hour lecture videos into crystal-clear study guides with one click:
+- **Big Picture & Core Purpose**: 2-3 sentences explaining what this document is about and why it matters in plain language.
+- **Core Concepts with Real-World Analogies**: Abstract concepts broken down with everyday relatable examples.
+- **Key Facts, Rules & Formulas**: Crucial definitions with exact page, slide, or timestamp citations.
+- **High-Yield Exam Takeaways**: 4-6 bite-sized bullet points highlighting what is most likely to appear on exam day.
+- **Common Traps & Student Misconceptions**: Highlights common mistakes and mnemonic tricks to avoid them.
+- **Self-Test Practice Check**: Interactive questions with hidden answers for immediate self-testing.
+- **Unified Master Course Guide**: Synthesizes all uploaded chapters and video lectures into one printable review sheet.
+
+</details>
+
+---
+
+<details>
+<summary><b>🤖 3. Socratic AI Tutor with 7 Teaching Modes</b> <i>(Click to expand)</i></summary>
+
+<br/>
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        7 PEDAGOGICAL TEACHING MODES                    │
+├──────────────────────────┬─────────────────────────────────────────────┤
+│ 1. Guided Thinking       │ Socratic method: direct answer + follow-up  │
+│ 2. Everyday Analogy      │ Relates abstract theory to daily life       │
+│ 3. Step-by-Step Guide    │ Breaks calculations into bite-sized steps   │
+│ 4. Mistake Buster        │ Flags common exam traps & confusing terms   │
+│ 5. Exam Prep Focus       │ High-yield definitions and test takeaways   │
+│ 6. Detailed Explanation  │ Deep theoretical foundation & architecture  │
+│ 7. Quick 30-Sec Summary  │ 3 punchy bullet points before class starts  │
+└──────────────────────────┴─────────────────────────────────────────────┘
+```
+
+> [!IMPORTANT]
+> **Strict English Language Requirement**: Even if a student inputs their question in Hindi or Spanish, or the lecture video was recorded abroad, the AI Tutor formulates all answers, explanations, and follow-up prompts strictly in clear, accessible English.
+
+</details>
+
+---
+
+<details>
+<summary><b>🎯 4. Adaptive Quizzes & Timed Mock Exam Mode</b> <i>(Click to expand)</i></summary>
+
+<br/>
+
+- **Adaptive Diagnostic Quizzes**: Questions dynamically adapt to focus on concepts where your Bayesian Knowledge Tracing score is lowest.
+- **Timed Mock Exams**: Full simulation with a live countdown clock (amber alert under 2 minutes, red alert under 60 seconds).
+- **Interactive Question Palette**: Jump across questions, track answered items, and use the **Flag for Review** button.
+- **Targeted Misconception Feedback**: When an incorrect answer is selected, Knovara explains the exact conceptual trap behind that option.
+
+</details>
+
+---
+
+<details>
+<summary><b>🗂️ 5. Spaced Repetition Flashcards & Visual Mind Map</b> <i>(Click to expand)</i></summary>
+
+<br/>
+
+- **SuperMemo SM-2 Spaced Repetition**: Flashcards are created automatically and scheduled based on cognitive recall intervals (*Again, Hard, Good, Easy*).
+- **Interactive Concept Mind Map**: A visual network of your syllabus color-coded by mastery:
+  - 🟢 **Green**: Mastered concepts ($P(L_t) \ge 0.85$)
+  - 🟡 **Yellow**: Actively learning ($0.50 \le P(L_t) < 0.85$)
+  - 🔴 **Red**: Weak topics needing review ($P(L_t) < 0.50$)
+- **1-Click Printable Revision Sheet**: Generates a clean, ink-friendly white summary sheet ready for printing or saving to PDF.
+
+</details>
+
+---
+
+## 🧮 Mathematical Foundation
+
+<details open>
+<summary><b>📊 Bayesian Knowledge Tracing (BKT) Formulation</b> <i>(Click to expand)</i></summary>
+
+<br/>
+
+Knovara models student understanding as a latent binary state $L_t \in \{0, 1\}$ using 4 core pedagogical parameters per concept:
+
+| Parameter | Meaning | Default Prior |
+| :--- | :--- | :--- |
+| **$P(L_0)$** | Initial prior probability that the student already knows the concept | `0.10` |
+| **$P(T)$** | Transition probability that the student learns the concept after an attempt | `0.15` |
+| **$P(G)$** | Guess parameter: probability student answers correctly despite not knowing | `0.20` |
+| **$P(S)$** | Slip parameter: probability student answers incorrectly despite knowing | `0.10` |
+
+#### 1. Posterior Update Upon Observation:
+$$\text{If Correct: } P(L_t | \text{Obs} = 1) = \frac{P(L_{t-1}) \cdot (1 - P(S))}{P(L_{t-1}) \cdot (1 - P(S)) + (1 - P(L_{t-1})) \cdot P(G)}$$
+
+$$\text{If Incorrect: } P(L_t | \text{Obs} = 0) = \frac{P(L_{t-1}) \cdot P(S)}{P(L_{t-1}) \cdot P(S) + (1 - P(L_{t-1})) \cdot (1 - P(G))}$$
+
+#### 2. Latent State Transition for Next Step:
+$$P(L_t) = P(L_t | \text{Obs}) + \Big(1 - P(L_t | \text{Obs})\Big) \cdot P(T)$$
+
+This prevents lucky guesses from inflating scores while protecting students from losing all progress due to a single careless mistake.
+
+</details>
+
+---
+
+<details>
+<summary><b>⏱️ SuperMemo SM-2 Spaced Repetition Algorithm</b> <i>(Click to expand)</i></summary>
+
+<br/>
+
+When a flashcard is reviewed with quality rating $q \in \{0, 1, 2, 3, 4, 5\}$:
+
+#### 1. Easiness Factor (EF) Adjustment:
+$$EF' = \max\left(1.3, \; EF + \Big(0.1 - (5 - q) \times (0.08 + (5 - q) \times 0.02)\Big)\right)$$
+
+#### 2. Interval Calculation:
+$$I(n) = \begin{cases} 
+1 \text{ day} & n = 1 \\ 
+6 \text{ days} & n = 2 \\ 
+I(n-1) \times EF' & n > 2 
+\end{cases}$$
+
+If $q < 3$ (user rated *Again*), repetition count resets to $n = 0$ and the card is scheduled for immediate review today.
+
+</details>
+
+---
+
+## ⚖️ How Knovara Compares
+
+| Feature | Generic ChatGPT | Quizlet / Anki | Traditional LMS | 🎓 **Knovara** |
+| :--- | :---: | :---: | :---: | :---: |
+| **Multilingual YouTube Auto-Translation** | ❌ (No video sync) | ❌ | ❌ | **✅ Yes (Gemini 2.5 Flash)** |
+| **Clickable Video Timestamps** | ❌ | ❌ | ❌ | **✅ Yes (`[YouTube: MM:SS]`)** |
+| **Strict Source-Grounded Citations** | ⚠️ (Prone to hallucination) | ❌ | ❌ | **✅ Yes (Page & Timestamp aligned)** |
+| **Socratic Multi-Turn Dialogue** | ⚠️ (Requires manual prompting) | ❌ | ❌ | **✅ Yes (7 Pedagogical Modes)** |
+| **Bayesian Knowledge Tracing (BKT)** | ❌ | ❌ | ❌ | **✅ Yes ($P(L_t)$, Slip, Guess)** |
+| **Adaptive Quizzes on Weak Spots** | ❌ | ❌ | ⚠️ (Static pools) | **✅ Yes (Automatic Blueprints)** |
+| **Spaced Repetition (SM-2)** | ❌ | ✅ | ❌ | **✅ Yes (Built-in Flashcards)** |
+| **Institutional RBAC & Admin Hub** | ❌ | ❌ | ⚠️ (Complex/Slow) | **✅ Yes (`/admin` Command Center)** |
+
+---
+
+## 🛡️ Admin Command Center & RBAC
+
+<div align="center">
+  <p><b>Access:</b> <code>/admin</code> (Requires role: <code>admin</code>)</p>
+</div>
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        ROLE-BASED ACCESS CONTROL (RBAC)                │
+├─────────────┬──────────────────────────────────────────────────────────┤
+│ 🟢 Student   │ Standard access to courses, tutor, notes, flashcards     │
+│ 🔵 Instructor│ Can inspect student cohort analytics & audit courseware  │
+│ 🟣 Admin     │ Full system privileges: manage users, promote roles,     │
+│             │ audit document chunks, and monitor database health       │
+└─────────────┴──────────────────────────────────────────────────────────┘
+```
+
+- **User Accounts Directory**: Search users by name/email, audit registration dates, and elevate permissions with 1 click.
+- **Course & Document Auditing**: View courses across all users, inspect chunks, vector storage, and quiz histories.
+- **Live Infrastructure Monitoring**: Real-time status for PostgreSQL pool connections, Gemini API, and server latency.
+
+---
+
+## 🏗️ System Architecture
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                          PRODUCTION ENVIRONMENT                        │
+├────────────────────────────────────────────────────────────────────────┤
+│  Frontend Client : React 19 + TypeScript + Vite + Tailwind CSS         │
+│  Edge Hosting    : Vercel CDN (https://knovara-beta.vercel.app)        │
+│  Backend API     : FastAPI + Pydantic + Uvicorn + Python 3.11          │
+│  API Hosting     : Render (https://knovara-backend.onrender.com)       │
+│  Database        : Supabase Cloud PostgreSQL + pgvector                │
+│  AI Engine       : Google Gemini 2.5 Flash                             │
+│  Authentication  : JWT (HS256) + Google OAuth 2.0 Identity             │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Quickstart Guide
 
 ### 1. Prerequisites
 - Python 3.11+
 - Node.js 18+
-- SQLite or PostgreSQL
+- SQLite (default for zero-friction local run) or PostgreSQL
 
-### 2. Backend Setup
+### 2. Backend Installation & Run
 ```bash
-cd backend
+# Clone the repository
+git clone https://github.com/jaiharijayapaul/Knovara.git
+cd Knovara/backend
+
+# Create virtual environment
 python -m venv .venv
 
+# Activate environment
 # On Windows:
 .venv\Scripts\activate
 # On Linux/macOS:
 source .venv/bin/activate
 
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env
+
+# Start backend server
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Frontend Setup
+### 3. Frontend Installation & Run
 ```bash
-cd frontend
+cd ../frontend
+
+# Install dependencies
 npm install
+
+# Start Vite development server
 npm run dev
 ```
 
-The app will run locally at `http://localhost:5173` and connect to the backend at `http://127.0.0.1:8000`.
+Open your browser at **`http://localhost:5173`**. The app will automatically communicate with the local backend running on port 8000.
 
-### 4. Production Deployment URLs
-- **Web Application**: [https://knovara-beta.vercel.app](https://knovara-beta.vercel.app)
-- **Backend API**: [https://knovara-backend.onrender.com](https://knovara-backend.onrender.com)
+---
+
+## 🌐 Production Endpoints
+
+- **Live Web Application**: [https://knovara-beta.vercel.app](https://knovara-beta.vercel.app)
+- **Live API Base**: [https://knovara-backend.onrender.com](https://knovara-backend.onrender.com)
 - **Health Check**: [https://knovara-backend.onrender.com/health](https://knovara-backend.onrender.com/health)
-- **API Documentation**: [https://knovara-backend.onrender.com/docs](https://knovara-backend.onrender.com/docs)
+- **Interactive Swagger Docs**: [https://knovara-backend.onrender.com/docs](https://knovara-backend.onrender.com/docs)
+- **Interactive ReDoc**: [https://knovara-backend.onrender.com/redoc](https://knovara-backend.onrender.com/redoc)
+
+---
+
+<div align="center">
+
+Made with ❤️ for students, educators, and lifelong learners worldwide.  
+**Knovara — Where Every Student Learns at Their Peak.**
+
+</div>
