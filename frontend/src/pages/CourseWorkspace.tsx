@@ -1769,8 +1769,9 @@ export const CourseWorkspace: React.FC = () => {
                   placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/80 transition-all font-mono"
                 />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Paste any lecture, seminar, or educational video link with English captions or transcripts enabled.
+                <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span><strong>Multilingual Video Support:</strong> Paste videos in English, Hindi, Spanish, French, German, Tamil, etc. Foreign lectures are automatically translated into English!</span>
                 </p>
               </div>
 
@@ -1787,15 +1788,16 @@ export const CourseWorkspace: React.FC = () => {
                 />
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-1.5 text-[11px] text-slate-400">
+              <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2 text-[11px] text-slate-400">
                 <div className="flex items-center space-x-1.5 text-slate-300 font-semibold">
                   <Sparkles className="w-3.5 h-3.5 text-teal-400" />
                   <span>What happens during ingestion?</span>
                 </div>
-                <ul className="list-disc pl-4 space-y-1 text-slate-400">
-                  <li>Captions are fetched and divided into semantic conceptual lecture segments.</li>
-                  <li>Each unit is indexed with precise timestamp ranges (e.g. <span className="text-sky-300 font-mono">[YouTube: 14:20-15:45]</span>).</li>
-                  <li>Vector embeddings are created for grounded citations in the AI Tutor and practice quizzes.</li>
+                <ul className="list-disc pl-4 space-y-1.5 text-slate-400">
+                  <li><strong>Captions & Timestamps:</strong> Speech is segmented into semantic units with exact video timestamps (e.g. <span className="text-sky-300 font-mono">[YouTube: 04:20-05:45]</span>).</li>
+                  <li><strong>Multilingual Auto-Translation:</strong> If the video is in Hindi, Spanish, or another language, it is automatically translated into clear academic English.</li>
+                  <li><strong>English AI Tutor & Notes:</strong> All generated notes, flashcards, and tutor answers are synthesized strictly in English.</li>
+                  <li><strong>Interactive Citations:</strong> Clicking any timestamp badge in chat or notes jumps straight to that moment on YouTube!</li>
                 </ul>
               </div>
 

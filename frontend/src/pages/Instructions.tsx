@@ -17,129 +17,139 @@ import {
   Target,
   Timer,
   Network,
-  Printer
+  Printer,
+  Shield,
+  FileText,
+  Users,
+  ExternalLink
 } from 'lucide-react';
 
+const YouTubeIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+  </svg>
+);
+
 export const Instructions: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const [activeSection, setActiveSection] = useState<'workflow' | 'modes' | 'features' | 'memory'>('workflow');
+  const { isAuthenticated, user } = useAuth();
+  const [activeSection, setActiveSection] = useState<'workflow' | 'modes' | 'features' | 'memory' | 'admin'>('workflow');
 
   const steps = [
     {
       number: '01',
-      title: 'Step 1: Upload Your Study Material',
+      title: 'Step 1: Upload Notes or Ingest YouTube Lectures',
       icon: UploadCloud,
       color: 'teal',
-      summary: 'Upload your lecture slides, PDF textbook, class notes, or audio transcripts.',
+      summary: 'Upload textbooks, slides, or paste any educational YouTube lecture URL.',
       details: [
-        'Click "Upload New Material" on your Dashboard or open any subject workspace.',
-        'Upload your PDF books, PowerPoint presentations (.pptx), text notes, or lecture transcripts.',
-        'Supports all subjects: Computer Science, Biology, Medicine, Physics, Mathematics, and Engineering.',
-        'Every subject is kept in its own clean folder so your notes never get mixed up.'
+        'Upload your PDF textbooks, PowerPoint presentations (.pptx), markdown files, or text notes.',
+        '🎥 YouTube Lecture Ingestion: Paste any video link (e.g., https://youtube.com/watch?v=...) into the dropzone to extract speech transcripts.',
+        '🌐 Multilingual Video Auto-Translation: If the video is in Hindi, Spanish, French, German, Tamil, or any other language, Knovara automatically translates the lecture transcript into fluent academic English!',
+        '⏱️ Clickable Timestamps: Every video concept is tagged with exact time ranges (e.g. [YouTube: 04:22 - 05:40]) allowing 1-click jumps directly to that second on YouTube.'
       ]
     },
     {
       number: '02',
-      title: 'Step 2: Instant AI Reading & Summary',
+      title: 'Step 2: Instant AI Reading & 1-Click Study Notes',
       icon: Sparkles,
       color: 'emerald',
-      summary: 'The AI reads your material and explains the key ideas in simple words.',
+      summary: 'The AI reads your material and synthesizes comprehensive study guides in simple English.',
       details: [
-        'The moment you upload, the AI reads through your pages and notes automatically.',
-        'It picks out the most important topics and writes short, easy-to-understand summaries.',
-        'You can check your main concepts right on your workspace anytime.',
-        'Add new notes or slides whenever you get new lectures from your teacher.'
+        'The moment you upload, the AI parses pages and video segments into high-dimensional vector embeddings.',
+        '📝 1-Click AI Study Notes: Click "Generate AI Study Notes" on any file or lecture to synthesize a full markdown study guide with intuitive analogies and self-checks.',
+        '📚 Course Master Guide: Click "Master Study Guide" to merge all chapters and video lectures into one comprehensive exam preparation handout.',
+        '🇬🇧 Strictly in English: All notes, summaries, and key definitions are formulated in fluent, crystal-clear English regardless of the video source language.'
       ]
     },
     {
       number: '03',
-      title: 'Step 3: Ask AI Tutor (Answers in Simple Words)',
+      title: 'Step 3: Ask Socratic AI Tutor (Source Grounded)',
       icon: Bot,
       color: 'cyan',
-      summary: 'Ask any question about your notes. The AI answers in clear, friendly language.',
+      summary: 'Ask any question about your notes. The AI answers clearly with exact page and video citations.',
       details: [
-        'Open the "Ask AI Tutor" tab to chat with your friendly personal assistant.',
-        'Ask anything: "Can you explain this in simple words?", "Give me an everyday example", or "Walk me through this step-by-step".',
-        'Choose your favorite way of learning: Simple Analogy, Step-by-Step, Mistake Buster, or Exam Key Points.',
-        'Every answer mentions the exact page from your notes so you can trust that it is 100% accurate.'
+        'Open the "Ask AI Tutor" tab to chat with your friendly personal study assistant.',
+        'Ask anything: "Explain gradient descent simply", "Give me a real-world analogy", or "Walk me through this formula step-by-step".',
+        'Choose from 7 teaching styles: Guided Thinking (Socratic), Everyday Analogy, First Principles, Mistake Buster, Exam Prep, Deep Dive, or Quick 30-Sec Summary.',
+        'Every answer cites exact page numbers or video timestamps so you can verify that it is 100% grounded in your syllabus.'
       ]
     },
     {
       number: '04',
-      title: 'Step 4: Practice with Smart Flashcards',
+      title: 'Step 4: Practice with Spaced Repetition Flashcards',
       icon: Repeat,
       color: 'amber',
       summary: 'Review terms and formulas using cards made directly from your material.',
       details: [
-        'Open the "Study Flashcards" tab to test your memory.',
-        'Flashcards are created automatically from the sentences and ideas in your notes.',
-        'Flip the card to see the simple answer, then rate how well you knew it: Again, Hard, Good, or Easy.',
-        'Smart timing brings cards back right before you forget them, helping you remember for exam day.'
+        'Open the "Study Flashcards" tab to test your cognitive recall.',
+        'Flashcards are created automatically from the core definitions, formulas, and concepts in your notes.',
+        'Flip the card to see the simple answer, then rate your recall: Again, Hard, Good, or Easy.',
+        'SuperMemo SM-2 Algorithm: Automatically computes optimal repetition intervals to schedule cards right before you forget them.'
       ]
     },
     {
       number: '05',
-      title: 'Step 5: Test Yourself with Quizzes & Mock Exams',
+      title: 'Step 5: Test Yourself with Adaptive Quizzes & Mock Exams',
       icon: Award,
       color: 'purple',
-      summary: 'Take practice quizzes or timed mock exams with clear, step-by-step explanations.',
+      summary: 'Take practice quizzes or timed mock exams with instant misconception explanations.',
       details: [
         'Take an untimed practice quiz to learn without pressure, or try a Timed Mock Exam with a real countdown clock.',
-        'Use the question palette to jump between questions and flag tricky ones to review later.',
-        'Get instant scores and clear explanations for any question you missed.',
-        'See your progress improve as you practice and build real confidence.'
+        'Adaptive Blueprints: Quizzes automatically target your weakest concepts discovered during previous practice sessions.',
+        'Misconception Feedback: When you miss a question, get an instant explanation explaining the specific trap you fell into.',
+        'Question Palette & Review: Jump between questions and flag tricky items to double-check before final submission.'
       ]
     }
   ];
 
   const modesGuide = [
     {
-      name: 'Guided Thinking',
+      name: 'Guided Thinking (Socratic)',
       tag: 'Think & Learn',
       badge: 'Default',
-      purpose: 'Asks you simple, encouraging questions so you can figure out the answer on your own.',
-      bestFor: 'Building confidence and truly understanding concepts rather than just memorizing answers.',
-      example: '"Looking at the first heading in your notes, what do you think is the main goal here?"'
+      purpose: 'Gives the direct answer first, then asks an encouraging question to help you connect ideas.',
+      bestFor: 'Building deep conceptual understanding rather than surface-level memorization.',
+      example: '"Supervised learning uses labeled inputs. Considering this, how would the model know if its prediction was right or wrong?"'
     },
     {
       name: 'Simple Everyday Analogy',
       tag: 'Easy to Picture',
       badge: 'Fun Examples',
       purpose: 'Explains tricky or difficult concepts using fun, everyday real-life examples.',
-      bestFor: 'Making difficult topics easy to picture and remember.',
-      example: '"Think of this concept like a GPS navigation system helping you reach a destination..."'
+      bestFor: 'Making abstract math, science, and coding concepts intuitive and easy to picture.',
+      example: '"Think of backpropagation like a coach reviewing game tape and showing each player exactly where to adjust their position."'
     },
     {
       name: 'Step-by-Step Guide',
       tag: 'Easy Steps',
       badge: 'Step-by-Step',
-      purpose: 'Breaks complex formulas, algorithms, or problems down into small, easy steps.',
-      bestFor: 'Math calculations, coding procedures, and tricky homework questions.',
-      example: '"Let us solve this in 3 easy steps. Step 1: what numbers are we given in the problem?"'
+      purpose: 'Breaks complex formulas, algorithms, or problems down into small, bite-sized steps.',
+      bestFor: 'Math derivations, coding procedures, and multi-step homework problems.',
+      example: '"Let us calculate this in 3 easy steps. Step 1: calculate the error difference between target and prediction."'
     },
     {
       name: 'Common Mistakes & Tips',
       tag: 'Mistake Buster',
       badge: 'Trap Warning',
       purpose: 'Points out common student traps and misconceptions, showing you the easy way to remember correctly.',
-      bestFor: 'Avoiding lost marks on tests and multiple-choice exams.',
-      example: '"Many students confuse precision with recall. Here is a simple trick to never mix them up..."'
+      bestFor: 'Avoiding lost marks on multiple-choice quizzes and tricky exam questions.',
+      example: '"Trap: Students often confuse precision with recall. Remember: Precision cares about quality, Recall cares about finding everyone."'
     },
     {
       name: 'Exam & Test Ready',
       tag: 'High Importance',
       badge: 'Exam Focus',
       purpose: 'Focuses strictly on the core definitions, formulas, and questions most likely to appear on your test.',
-      bestFor: 'Quick revision before tests, midterms, and final exam day.',
-      example: '"Here are the top 3 points your teacher is most likely to ask about this chapter on the exam."'
+      bestFor: 'High-yield revision right before midterms, unit tests, and final exams.',
+      example: '"Here are the 3 points your professor is most likely to test from this lecture."'
     },
     {
       name: 'Detailed Explanation',
       tag: 'In-Depth',
       badge: 'Thorough',
-      purpose: 'Gives you a full, clear explanation with all the background, examples, and real-world uses.',
-      bestFor: 'Course projects, assignments, and understanding the deeper theory.',
-      example: '"Here is a clear look at how this technique is used by scientists and engineers in real life."'
+      purpose: 'Gives you a full, clear explanation with theoretical background, nuances, and real-world applications.',
+      bestFor: 'Course projects, research papers, and developing mastery of complex subjects.',
+      example: '"Here is a complete breakdown of how this architecture is implemented in production systems."'
     },
     {
       name: 'Quick 30-Sec Summary',
@@ -147,17 +157,43 @@ export const Instructions: React.FC = () => {
       badge: 'Quick',
       purpose: 'Gives you 3 quick, punchy bullet points to review the main ideas in 30 seconds.',
       bestFor: 'Quickly refreshing your memory right before class starts.',
-      example: '"Here is a 30-second summary with the 3 most important takeaways from your reading."'
+      example: '"Here is a 30-second summary with the 3 most essential takeaways from your reading."'
     }
   ];
 
   const newFeatures = [
     {
+      title: 'Multilingual YouTube Ingestion & Auto-Translation',
+      icon: YouTubeIcon,
+      tag: 'Global Lectures',
+      color: 'red',
+      description: 'Ingest any YouTube lecture video in any language with automatic translation into clear English.',
+      benefits: [
+        'Paste any educational YouTube URL into your course workspace.',
+        'Automatically extracts captions in English, Hindi, Spanish, French, German, Tamil, etc.',
+        'Non-English lectures are automatically translated into clear, fluent English while preserving exact timestamps.',
+        'Interactive timestamp badges [YouTube: 04:22 - 05:40] let you jump straight to the video with 1 click.'
+      ]
+    },
+    {
+      title: '1-Click AI Study Notes & Master Guide',
+      icon: FileText,
+      tag: 'Study Materials',
+      color: 'emerald',
+      description: 'Synthesize beautiful, comprehensive study notes from any document or lecture video.',
+      benefits: [
+        'Click "Generate AI Study Notes" on any uploaded document or ingested video.',
+        'Organized into 6 clear sections: Big Picture, Core Concepts, Key Facts/Formulas, Exam Takeaways, Traps, and Self-Tests.',
+        'Click "Master Study Guide" to synthesize a complete course-wide review sheet in one click.',
+        'All synthesized notes are formulated strictly in fluent, easy-to-understand English.'
+      ]
+    },
+    {
       title: 'Interactive Concept Mind Map',
       icon: Network,
       tag: 'Visual Learning',
       color: 'teal',
-      description: 'See how all your course concepts connect together in a visual network.',
+      description: 'See how all your course concepts connect together in an interactive visual network.',
       benefits: [
         'Green circles mean you have mastered that concept.',
         'Yellow circles show topics you are currently learning.',
@@ -169,11 +205,11 @@ export const Instructions: React.FC = () => {
       title: 'One-Click Exam Revision Sheet',
       icon: Printer,
       tag: 'Print & PDF',
-      color: 'emerald',
-      description: 'Export a clean, 1-page printable study guide ready for your final exam review.',
+      color: 'cyan',
+      description: 'Export a clean, printable study handout ready for your final exam review.',
       benefits: [
         'Automatically highlights your high-priority weak spots that need attention first.',
-        'Includes core definitions and key takeaways from your uploaded notes.',
+        'Includes core definitions, key formulas, and exam takeaways from your syllabus.',
         'Includes high-yield quick Q&As with a button to hide/show answers for self-testing.',
         'Click "Print / Save PDF" to get a clean white handout with no dark backgrounds.'
       ]
@@ -189,6 +225,19 @@ export const Instructions: React.FC = () => {
         'Friendly color alerts turn amber under 2 minutes and red under 60 seconds.',
         'Question palette lets you jump directly to any question with one click.',
         'Use the "Flag for Review" button to mark tricky questions and revisit them before submitting.'
+      ]
+    },
+    {
+      title: 'Admin Command Center & Role Control',
+      icon: Shield,
+      tag: 'Educator & Admin',
+      color: 'purple',
+      description: 'Comprehensive administrative dashboard for educators and platform managers.',
+      benefits: [
+        'Access the dedicated /admin panel to manage all user accounts and system status.',
+        'Role-Based Access Control (RBAC): Seamlessly assign Student, Instructor, or Admin roles.',
+        'Audit courses, documents, quizzes, and chunk storage across all users.',
+        'Monitor database health, server latency, and AI service status in real-time.'
       ]
     }
   ];
@@ -211,11 +260,20 @@ export const Instructions: React.FC = () => {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-md shadow-teal-500/20">
                 <GraduationCap className="w-4 h-4 text-slate-950 stroke-[2.5]" />
               </div>
-              <span className="font-bold text-lg text-white">Knovara Student Guide</span>
+              <span className="font-bold text-lg text-white">Knovara Learning Guide</span>
             </div>
           </div>
 
           <div className="flex items-center space-x-3">
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-purple-300 bg-purple-950/50 border border-purple-500/30 hover:bg-purple-900/40 transition-all"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Admin Hub</span>
+              </Link>
+            )}
             {isAuthenticated ? (
               <Link
                 to="/courses"
@@ -243,16 +301,16 @@ export const Instructions: React.FC = () => {
         <section className="text-center space-y-4 max-w-3xl mx-auto pt-4">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-xs font-medium text-teal-300">
             <HelpCircle className="w-3.5 h-3.5 text-teal-400" />
-            <span>Easy Student Guide</span>
+            <span>Complete Student & Educator Guide</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
-            How to Study and Learn with{' '}
+            How to Learn, Practice & Master with{' '}
             <span className="bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-300 bg-clip-text text-transparent">
               Knovara
             </span>
           </h1>
           <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-            A simple, friendly guide to help you upload your notes, ask questions in simple words, practice with smart flashcards, take quizzes, and master any subject easily.
+            Your end-to-end handbook: upload notes, ingest multilingual YouTube lectures with auto-translation, chat with the Socratic AI tutor in English, study smart flashcards, track mastery, and ace your exams.
           </p>
         </section>
 
@@ -297,7 +355,17 @@ export const Instructions: React.FC = () => {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              4. How It Helps You Remember
+              4. Science of Memory & BKT
+            </button>
+            <button
+              onClick={() => setActiveSection('admin')}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                activeSection === 'admin'
+                  ? 'bg-purple-500 text-white shadow-md shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              5. Admin & Educator Hub
             </button>
           </div>
         </div>
@@ -311,7 +379,7 @@ export const Instructions: React.FC = () => {
                 <span>The 5 Simple Steps to Master Any Subject</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Follow these 5 steps to turn your notes into knowledge you understand and remember for exams.
+                Follow these 5 steps to turn your notes and lecture videos into permanent knowledge you understand and remember for exams.
               </p>
             </div>
 
@@ -356,10 +424,10 @@ export const Instructions: React.FC = () => {
             <div className="text-left space-y-1">
               <h2 className="text-xl font-bold text-white flex items-center space-x-2">
                 <Bot className="w-5 h-5 text-teal-400" />
-                <span>7 Friendly Ways the AI Explains Topics</span>
+                <span>7 Friendly Ways the AI Explains Topics (Strictly in English)</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Choose the explanation style that works best for you. You can switch styles at any time while chatting.
+                Choose the explanation style that fits your learning goal. You can switch styles at any time in the Ask AI Tutor tab.
               </p>
             </div>
 
@@ -371,23 +439,24 @@ export const Instructions: React.FC = () => {
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-bold text-white">{m.name}</h3>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                      <span className="px-2.5 py-1 rounded-full bg-slate-800 text-[11px] font-semibold text-teal-300">
                         {m.badge}
                       </span>
+                      <span className="text-[11px] font-mono text-slate-500">{m.tag}</span>
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                      {m.purpose}
-                    </p>
-                    <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1.5">
-                      <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider block">When to Use This</span>
-                      <p className="text-[11px] text-slate-400">{m.bestFor}</p>
+                    <div>
+                      <h3 className="text-base font-bold text-white">{m.name}</h3>
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">{m.purpose}</p>
                     </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-800/60">
-                    <span className="text-[10px] text-slate-500 block mb-1">Example Tutor Response:</span>
-                    <p className="text-xs text-slate-300 italic font-serif">"{m.example}"</p>
+                    <div className="pt-2 border-t border-slate-800/80 space-y-2 text-xs">
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400 block mb-0.5">Best When:</span>
+                        <p className="text-slate-300 text-xs">{m.bestFor}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 italic text-slate-400 text-[11px] leading-relaxed">
+                        {m.example}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -401,14 +470,14 @@ export const Instructions: React.FC = () => {
             <div className="text-left space-y-1">
               <h2 className="text-xl font-bold text-white flex items-center space-x-2">
                 <Sparkles className="w-5 h-5 text-teal-400" />
-                <span>Special Study Tools Made for Students</span>
+                <span>Core Study Tools & Platform Capabilities</span>
               </h2>
               <p className="text-xs text-slate-400">
-                These built-in features help you study faster, spot weak areas, and practice under real exam conditions.
+                Explore the built-in learning features designed to help you prepare for exams faster and more effectively.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {newFeatures.map((feat, idx) => {
                 const Icon = feat.icon;
                 return (
@@ -421,7 +490,7 @@ export const Instructions: React.FC = () => {
                         <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
                           <Icon className="w-5 h-5" />
                         </div>
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                        <span className="px-2.5 py-1 rounded-full bg-slate-800 text-[11px] font-semibold text-slate-300">
                           {feat.tag}
                         </span>
                       </div>
@@ -445,53 +514,57 @@ export const Instructions: React.FC = () => {
           </section>
         )}
 
-        {/* TAB 4: HOW IT HELPS YOU REMEMBER */}
+        {/* TAB 4: HOW IT HELPS YOU REMEMBER & BKT */}
         {activeSection === 'memory' && (
           <section className="space-y-8 animate-in fade-in duration-200">
             <div className="text-left space-y-1">
               <h2 className="text-xl font-bold text-white flex items-center space-x-2">
                 <BrainCircuit className="w-5 h-5 text-teal-400" />
-                <span>How Knovara Helps You Remember (In Simple Words)</span>
+                <span>The Cognitive Science Behind Knovara</span>
               </h2>
               <p className="text-xs text-slate-400">
-                How Knovara tracks your progress, prevents lucky guesses, and schedules review times so you remember for test day.
+                How Bayesian Knowledge Tracing (BKT) and Spaced Repetition guarantee long-term retention.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Progress & Knowledge Tracing */}
+              {/* Bayesian Knowledge Tracing */}
               <div className="rounded-2xl bg-slate-900/60 border border-slate-800 p-6 space-y-4">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
                     <Activity className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Smart Progress Tracking</h3>
-                    <p className="text-xs text-slate-400">Knowing what you truly understand</p>
+                    <h3 className="text-base font-bold text-white">Bayesian Knowledge Tracing (BKT)</h3>
+                    <p className="text-xs text-slate-400">Probabilistic latent mastery modeling</p>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Instead of just counting how many questions you got right, Knovara looks at whether you truly understand the concept or just made a lucky guess.
+                  Unlike traditional platforms that simply count correct answers, Knovara models your internal understanding using 4 cognitive parameters per concept:
                 </p>
 
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5 text-slate-300">
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5 text-slate-300 font-mono">
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-cyan-400 shrink-0">🎯 Mastery Score:</span>
-                    <span>Shows how well you know each topic from 0% to 100%.</span>
+                    <span className="font-bold text-cyan-400 shrink-0">P(L₀):</span>
+                    <span className="font-sans text-slate-300">Initial mastery prior before any question is answered.</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-cyan-400 shrink-0">🍀 Lucky Guess Filter:</span>
-                    <span>If you guess an answer right by chance, Knovara asks another question later to make sure you truly know it.</span>
+                    <span className="font-bold text-cyan-400 shrink-0">P(T):</span>
+                    <span className="font-sans text-slate-300">Transition probability — likelihood of learning a topic after practice.</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-cyan-400 shrink-0">🔄 Careless Mistake Protection:</span>
-                    <span>If you make a small slip on something you already know well, your score doesn't suddenly drop to zero.</span>
+                    <span className="font-bold text-cyan-400 shrink-0">P(G):</span>
+                    <span className="font-sans text-slate-300">Guess parameter — filters out lucky guesses so your score reflects genuine knowledge.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold text-cyan-400 shrink-0">P(S):</span>
+                    <span className="font-sans text-slate-300">Slip parameter — prevents a single careless mistake from resetting a mastered topic.</span>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  This gives you an honest, reliable view of your strengths so you walk into exams with genuine confidence.
+                  Whenever you submit a quiz answer, Knovara computes the posterior probability <span className="font-mono text-cyan-300">P(L_t)</span> to accurately map your concept mastery from 0% to 100%.
                 </p>
               </div>
 
@@ -502,34 +575,145 @@ export const Instructions: React.FC = () => {
                     <Repeat className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Smart Review Timing (Spaced Memory)</h3>
-                    <p className="text-xs text-slate-400">Locking knowledge into long-term memory</p>
+                    <h3 className="text-base font-bold text-white">SuperMemo SM-2 Spaced Repetition</h3>
+                    <p className="text-xs text-slate-400">Beating the Ebbinghaus Forgetting Curve</p>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Our brains naturally forget new information within a few days unless we review it. Knovara schedules your reviews right before you're about to forget.
+                  Our brains naturally forget newly learned facts within days unless reinforced. Knovara schedules reviews at the mathematically optimal point of decay:
                 </p>
 
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5 text-slate-300">
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-purple-400 shrink-0">Day 1:</span>
-                    <span>First review right after reading the notes to form the memory.</span>
+                    <span className="font-bold text-purple-400 shrink-0">Repetition 1:</span>
+                    <span>1 day interval after first learning the concept.</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-purple-400 shrink-0">Day 3 to 6:</span>
-                    <span>Second review to strengthen the memory path in your brain.</span>
+                    <span className="font-bold text-purple-400 shrink-0">Repetition 2:</span>
+                    <span>6 days interval to solidify memory consolidation.</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-purple-400 shrink-0">2 to 4 Weeks:</span>
-                    <span>Final refresh to lock the knowledge permanently into your long-term memory.</span>
+                    <span className="font-bold text-purple-400 shrink-0">Repetition 3+:</span>
+                    <span>Dynamically scaled by your Easiness Factor (EF) rating (Again, Hard, Good, Easy).</span>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Rating a card "Again" brings it back immediately so you can fix weak spots today, instead of discovering them on the exam paper.
+                  Rating a card "Again" immediately drops its interval to review today, ensuring you fix gaps before test day.
                 </p>
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 5: ADMIN & EDUCATOR HUB */}
+        {activeSection === 'admin' && (
+          <section className="space-y-8 animate-in fade-in duration-200">
+            <div className="text-left space-y-1">
+              <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                <Shield className="w-5 h-5 text-purple-400" />
+                <span>Admin Command Center & Institutional Management</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Institutional controls for teachers, school administrators, and system managers to oversee users and learning assets.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* User & Role Management */}
+              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 p-6 space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <Users className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white">User Accounts & RBAC</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  View all registered student and teacher profiles. Search by name or email, inspect account creation dates, and elevate permissions between:
+                </p>
+                <div className="space-y-1.5 text-xs text-slate-400 pt-2 border-t border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-emerald-300">student</span>
+                    <span>Standard access to workspaces, tutor, and flashcards.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-blue-300">instructor</span>
+                    <span>Can author courses, inspect syllabus coverage, and review class analytics.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-purple-300">admin</span>
+                    <span>Full privileges to manage users, system database, and server endpoints.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Course & Document Control */}
+              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 p-6 space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white">Course & Document Audit</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Comprehensive audit oversight across all active learning spaces:
+                </p>
+                <ul className="space-y-2 text-xs text-slate-400 pt-2 border-t border-slate-800">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                    <span>Audit courses created across all subjects and departments.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                    <span>Inspect uploaded PDFs, PPTX slides, and ingested YouTube videos.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                    <span>Review semantic chunk counts, vector indexing status, and quiz generations.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* System & Infrastructure Health */}
+              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 p-6 space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white">Infrastructure Status</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Live health monitoring for the entire Knovara production deployment:
+                </p>
+                <ul className="space-y-2 text-xs text-slate-400 pt-2 border-t border-slate-800">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>PostgreSQL Database connectivity & connection pool latency.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Google Gemini 2.5 Flash API connectivity and rate limits.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>FastAPI Render backend and Vercel edge proxy performance.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-purple-950/30 border border-purple-500/30 flex items-center justify-between flex-wrap gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-purple-400" />
+                  <span>How to Access the Admin Dashboard</span>
+                </h4>
+                <p className="text-xs text-slate-300">
+                  If your account has been granted the <span className="font-bold text-purple-300">admin</span> role, you can access the command center at <span className="font-mono text-purple-300">/admin</span> or via the top navigation badge.
+                </p>
+              </div>
+              <Link
+                to="/admin"
+                className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-600/30 transition-all"
+              >
+                <span>Launch Admin Command Center</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </section>
         )}
@@ -539,7 +723,7 @@ export const Instructions: React.FC = () => {
           <div className="space-y-2 text-left">
             <h3 className="text-xl sm:text-2xl font-bold text-white">Ready to Start Learning?</h3>
             <p className="text-xs sm:text-sm text-slate-400 max-w-xl">
-              Upload your notes or slides, ask questions in simple words, and get ready to ace your tests with confidence.
+              Upload your notes, paste lecture videos, ask questions in simple words, and get ready to ace your tests with confidence.
             </p>
           </div>
           <div className="flex items-center space-x-3 shrink-0">
