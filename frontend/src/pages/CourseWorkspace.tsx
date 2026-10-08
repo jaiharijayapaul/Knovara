@@ -101,8 +101,10 @@ export const CourseWorkspace: React.FC = () => {
 
   // YouTube Lecture Ingestion state
   const [showYouTubeModal, setShowYouTubeModal] = useState<boolean>(false);
+  const [youtubeModalTab, setYoutubeModalTab] = useState<'url' | 'transcript'>('url');
   const [youtubeUrl, setYoutubeUrl] = useState<string>('');
   const [youtubeTitle, setYoutubeTitle] = useState<string>('');
+  const [youtubeTranscriptText, setYoutubeTranscriptText] = useState<string>('');
   const [isIngestingYouTube, setIsIngestingYouTube] = useState<boolean>(false);
   const [youtubeError, setYoutubeError] = useState<string | null>(null);
 
@@ -269,18 +271,24 @@ export const CourseWorkspace: React.FC = () => {
 
   const handleYouTubeIngest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !youtubeUrl.trim()) return;
+    if (!id) return;
+    if (youtubeModalTab === 'url' && !youtubeUrl.trim()) return;
+    if (youtubeModalTab === 'transcript' && !youtubeTranscriptText.trim()) return;
+
     setIsIngestingYouTube(true);
     setYoutubeError(null);
     try {
       const doc = await ingestYouTubeLecture(id, {
-        url: youtubeUrl.trim(),
+        url: youtubeUrl.trim() || 'https://www.youtube.com/watch?v=manual_lecture',
         title: youtubeTitle.trim() || undefined,
+        manual_transcript: youtubeModalTab === 'transcript' ? youtubeTranscriptText.trim() : undefined,
       });
       setUploadSuccess(`Successfully ingested YouTube lecture "${doc.filename}"! Extracted ${doc.chunks_count} semantic timestamp units.`);
       setShowYouTubeModal(false);
       setYoutubeUrl('');
       setYoutubeTitle('');
+      setYoutubeTranscriptText('');
+      setYoutubeModalTab('url');
       await loadDocuments();
       await loadCourse();
       await loadRAGStatus();
@@ -1749,31 +1757,124 @@ export const CourseWorkspace: React.FC = () => {
               </button>
             </div>
 
+            {/* Modal Tabs */}
+            <div className="flex p-1 bg-slate-950/80 rounded-2xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setYoutubeModalTab('url')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                  youtubeModalTab === 'url'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <YouTubeIcon className="w-4 h-4 text-rose-500" />
+                <span>Auto Fetch (URL)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setYoutubeModalTab('transcript')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                  youtubeModalTab === 'transcript'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                <span>Paste Transcript</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  Cloud Safe
+                </span>
+              </button>
+            </div>
+
             {youtubeError && (
-              <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 flex items-start space-x-2.5 text-xs text-red-300">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div className="flex-1 leading-relaxed">{youtubeError}</div>
+              <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 space-y-2 text-xs text-red-300">
+                <div className="flex items-start space-x-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 leading-relaxed">{youtubeError}</div>
+                </div>
+                {youtubeModalTab === 'url' && (
+                  <div className="pt-1 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setYoutubeModalTab('transcript');
+                        setYoutubeError(null);
+                      }}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-all font-semibold text-[11px] cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Switch to "Paste Transcript" Tab →</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
             <form onSubmit={handleYouTubeIngest} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  YouTube Video URL <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/80 transition-all font-mono"
-                />
-                <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
-                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-                  <span><strong>Multilingual Video Support:</strong> Paste videos in English, Hindi, Spanish, French, German, Tamil, etc. Foreign lectures are automatically translated into English!</span>
-                </p>
-              </div>
+              {youtubeModalTab === 'url' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    YouTube Video URL <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/80 transition-all font-mono"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span><strong>Multilingual Video Support:</strong> Paste videos in English, Hindi, Spanish, French, German, Tamil, etc. Foreign lectures are automatically translated into English!</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      YouTube Video URL <span className="text-slate-500 font-normal">(Optional, allows interactive timestamp jump links)</span>
+                    </label>
+                    <input
+                      type="url"
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=... (optional)"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/80 transition-all font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-300">
+                        Lecture Transcript / Captions <span className="text-red-400">*</span>
+                      </label>
+                      <span className="text-[11px] text-amber-400/90 font-medium">Timestamps supported or raw text</span>
+                    </div>
+                    <textarea
+                      required
+                      rows={5}
+                      value={youtubeTranscriptText}
+                      onChange={(e) => setYoutubeTranscriptText(e.target.value)}
+                      placeholder="Paste YouTube transcript (with or without timestamps) or lecture notes here...&#10;&#10;Example:&#10;0:00 Welcome to the lecture...&#10;0:45 Today we cover binary search..."
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/80 transition-all font-mono leading-relaxed"
+                    />
+                    <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[11px] text-slate-400 space-y-1 mt-1.5">
+                      <p className="font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        <span>How to get transcript from YouTube in 5 seconds:</span>
+                      </p>
+                      <ol className="list-decimal pl-4 space-y-0.5 text-slate-400">
+                        <li>Open the lecture video on YouTube.</li>
+                        <li>Click the <strong>"..."</strong> button below the video title &rarr; select <strong>"Show transcript"</strong>.</li>
+                        <li>Select and copy all transcript text, then paste it into the box above!</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -1795,9 +1896,9 @@ export const CourseWorkspace: React.FC = () => {
                 </div>
                 <ul className="list-disc pl-4 space-y-1.5 text-slate-400">
                   <li><strong>Captions & Timestamps:</strong> Speech is segmented into semantic units with exact video timestamps (e.g. <span className="text-sky-300 font-mono">[YouTube: 04:20-05:45]</span>).</li>
-                  <li><strong>Multilingual Auto-Translation:</strong> If the video is in Hindi, Spanish, or another language, it is automatically translated into clear academic English.</li>
-                  <li><strong>English AI Tutor & Notes:</strong> All generated notes, flashcards, and tutor answers are synthesized strictly in English.</li>
-                  <li><strong>Interactive Citations:</strong> Clicking any timestamp badge in chat or notes jumps straight to that moment on YouTube!</li>
+                  <li><strong>Multilingual Auto-Translation:</strong> Foreign language transcripts are translated into clear academic English.</li>
+                  <li><strong>English AI Tutor & Notes:</strong> All generated notes, flashcards, and practice questions are synthesized strictly in English.</li>
+                  <li><strong>Interactive Citations:</strong> Clicking any timestamp badge in chat or notes jumps straight to that moment in the lecture!</li>
                 </ul>
               </div>
 
@@ -1815,7 +1916,10 @@ export const CourseWorkspace: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isIngestingYouTube || !youtubeUrl.trim()}
+                  disabled={
+                    isIngestingYouTube ||
+                    (youtubeModalTab === 'url' ? !youtubeUrl.trim() : !youtubeTranscriptText.trim())
+                  }
                   className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-red-400 to-amber-400 hover:from-red-300 hover:to-amber-300 disabled:opacity-50 transition-all flex items-center space-x-2 cursor-pointer shadow-lg shadow-red-500/10"
                 >
                   {isIngestingYouTube ? (
@@ -1825,8 +1929,14 @@ export const CourseWorkspace: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <YouTubeIcon className="w-3.5 h-3.5 text-slate-950" />
-                      <span>Ingest & Generate Citations</span>
+                      {youtubeModalTab === 'url' ? (
+                        <YouTubeIcon className="w-3.5 h-3.5 text-slate-950" />
+                      ) : (
+                        <FileText className="w-3.5 h-3.5 text-slate-950" />
+                      )}
+                      <span>
+                        {youtubeModalTab === 'url' ? 'Ingest & Generate Citations' : 'Ingest Pasted Transcript'}
+                      </span>
                     </>
                   )}
                 </button>

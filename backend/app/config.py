@@ -1,6 +1,6 @@
 """Application configuration using Pydantic Settings."""
 
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     LLM_RATE_LIMIT: str = "15/minute"
     AUTH_RATE_LIMIT: str = "10/minute"
     REDIS_URL: str = ""
+
+    # YouTube Proxy Configuration (Solves datacenter IP blocks on Render/AWS)
+    YOUTUBE_PROXY: Optional[str] = None  # e.g., "http://username:password@proxy-ip:port"
+    WEBSHARE_PROXY_USERNAME: Optional[str] = None
+    WEBSHARE_PROXY_PASSWORD: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

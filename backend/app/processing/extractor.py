@@ -1,6 +1,7 @@
 """Multimodal extraction engine supporting PDF, PPTX, Video/Audio, and Text files."""
 
 import io
+import os
 import re
 import json
 import logging
@@ -147,6 +148,48 @@ class MultimodalExtractor:
         }]
 
     @classmethod
+    def _get_youtube_api(cls) -> YouTubeTranscriptApi:
+        """Instantiate YouTubeTranscriptApi with optional proxy configuration (Generic or Webshare)."""
+        proxy_config = None
+        try:
+            from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
+
+            # 1. Check if Webshare credentials configured
+            webshare_user = getattr(settings, "WEBSHARE_PROXY_USERNAME", None) or os.getenv("WEBSHARE_PROXY_USERNAME")
+            webshare_pass = getattr(settings, "WEBSHARE_PROXY_PASSWORD", None) or os.getenv("WEBSHARE_PROXY_PASSWORD")
+            if webshare_user and webshare_pass:
+                proxy_config = WebshareProxyConfig(
+                    proxy_username=webshare_user,
+                    proxy_password=webshare_pass,
+                )
+                logger.info("Configured YouTubeTranscriptApi with WebshareProxyConfig")
+
+            # 2. Check if generic proxy URL configured (e.g. YOUTUBE_PROXY or HTTPS_PROXY)
+            if not proxy_config:
+                proxy_url = (
+                    getattr(settings, "YOUTUBE_PROXY", None)
+                    or os.getenv("YOUTUBE_PROXY")
+                    or os.getenv("HTTPS_PROXY")
+                    or os.getenv("HTTP_PROXY")
+                )
+                if proxy_url:
+                    proxy_config = GenericProxyConfig(
+                        http_url=proxy_url,
+                        https_url=proxy_url,
+                    )
+                    logger.info(f"Configured YouTubeTranscriptApi with GenericProxyConfig ({proxy_url[:15]}...)")
+        except Exception as proxy_err:
+            logger.warning(f"Could not initialize YouTube proxy config: {proxy_err}")
+
+        if proxy_config:
+            try:
+                return YouTubeTranscriptApi(proxy_config=proxy_config)
+            except Exception as e:
+                logger.warning(f"Failed to initialize YouTubeTranscriptApi with proxy: {e}")
+
+        return YouTubeTranscriptApi()
+
+    @classmethod
     async def extract_youtube(
         cls, url: str, custom_title: Optional[str] = None
     ) -> Tuple[str, str, List[Dict[str, Any]]]:
@@ -192,7 +235,7 @@ class MultimodalExtractor:
         chosen_transcript = None
         is_natively_translated = False
         try:
-            api = YouTubeTranscriptApi()
+            api = cls._get_youtube_api()
             if hasattr(api, "fetch"):
                 try:
                     # Priority 1: Check for English transcripts
@@ -261,9 +304,16 @@ class MultimodalExtractor:
             elif hasattr(YouTubeTranscriptApi, "get_transcript"):
                 snippets = YouTubeTranscriptApi.get_transcript(video_id)
         except Exception as e:
-            logger.error(f"Error fetching YouTube transcript for video {video_id}: {e}")
+            err_msg = str(e)
+            logger.error(f"Error fetching YouTube transcript for video {video_id}: {err_msg}")
+            if "blocking requests from your IP" in err_msg or "IpBlocked" in type(e).__name__ or "RequestBlocked" in type(e).__name__:
+                raise ValueError(
+                    "YouTube blocked automated transcript requests from this server's cloud IP (Render/AWS). "
+                    "Please switch to the 'Paste Transcript' tab to paste the lecture transcript directly, "
+                    "or configure a YOUTUBE_PROXY in your backend environment variables."
+                )
             raise ValueError(
-                f"Could not retrieve captions/transcript for this YouTube video. Please ensure the video has subtitles or captions enabled in any language: {e}"
+                f"Could not retrieve captions/transcript for this YouTube video. Please ensure the video has subtitles or captions enabled in any language: {err_msg}"
             )
 
         if not snippets:
@@ -335,6 +385,182 @@ class MultimodalExtractor:
 
         logger.info(
             f"Extracted {len(segments)} semantic lecture segments from YouTube video '{video_title}' ({video_id})"
+        )
+        return video_title, video_id, segments
+
+    @classmethod
+    async def extract_manual_transcript(
+        cls,
+        raw_text: str,
+        url: Optional[str] = None,
+        custom_title: Optional[str] = None,
+    ) -> Tuple[str, str, List[Dict[str, Any]]]:
+        """
+        Parses manually pasted transcript or subtitle text (with or without timestamps)
+        and segments it into pedagogically aligned knowledge units.
+        Returns: (video_title, video_id, extracted_segments)
+        """
+        if not raw_text or not raw_text.strip():
+            raise ValueError("Pasted transcript text cannot be empty.")
+
+        cleaned_text = raw_text.strip()
+
+        # 1. Extract 11-char video ID if a URL was provided
+        video_id = "manual_lecture"
+        if url:
+            patterns = [
+                r"(?:v=|\/|youtu\.be\/|embed\/|live\/|shorts\/)([a-zA-Z0-9_-]{11})",
+            ]
+            for p in patterns:
+                m = re.search(p, url)
+                if m:
+                    video_id = m.group(1)
+                    break
+
+        # 2. Resolve video title
+        video_title = custom_title
+        if not video_title and video_id != "manual_lecture":
+            try:
+                oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+                async with httpx.AsyncClient(timeout=6.0) as client:
+                    resp = await client.get(oembed_url)
+                    if resp.status_code == 200:
+                        video_title = resp.json().get("title")
+            except Exception:
+                pass
+
+        if not video_title:
+            if video_id != "manual_lecture":
+                video_title = f"YouTube Lecture ({video_id})"
+            else:
+                first_line = cleaned_text.splitlines()[0][:50]
+                video_title = f"Lecture Notes ({first_line}...)" if first_line else "Lecture Transcript"
+
+        # 3. Parse timestamped cues or convert plain text into timestamped segments
+        lines = [ln.strip() for ln in cleaned_text.splitlines() if ln.strip()]
+        ts_standalone = re.compile(r"^(\d{1,2}:\d{2}(?::\d{2})?)$")
+        ts_inline = re.compile(r"^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$")
+        ts_vtt = re.compile(r"^(\d{1,2}:\d{2}(?::\d{2})?)\s*(?:-->|-)\s*(\d{1,2}:\d{2}(?::\d{2})?)$")
+
+        parsed_items: List[Dict[str, Any]] = []
+        curr_ts = "00:00"
+        accumulated_text: List[str] = []
+        has_explicit_timestamps = False
+
+        for line in lines:
+            if line.upper().startswith("WEBVTT") or (line.isdigit() and len(line) <= 4):
+                continue
+
+            vtt_m = ts_vtt.match(line)
+            if vtt_m:
+                has_explicit_timestamps = True
+                if accumulated_text:
+                    parsed_items.append({"start": curr_ts, "text": " ".join(accumulated_text)})
+                    accumulated_text = []
+                curr_ts = vtt_m.group(1)
+                continue
+
+            stand_m = ts_standalone.match(line)
+            if stand_m:
+                has_explicit_timestamps = True
+                if accumulated_text:
+                    parsed_items.append({"start": curr_ts, "text": " ".join(accumulated_text)})
+                    accumulated_text = []
+                curr_ts = stand_m.group(1)
+                continue
+
+            inline_m = ts_inline.match(line)
+            if inline_m:
+                has_explicit_timestamps = True
+                if accumulated_text:
+                    parsed_items.append({"start": curr_ts, "text": " ".join(accumulated_text)})
+                    accumulated_text = []
+                curr_ts = inline_m.group(1)
+                accumulated_text.append(inline_m.group(2))
+                continue
+
+            accumulated_text.append(line)
+
+        if accumulated_text:
+            parsed_items.append({"start": curr_ts, "text": " ".join(accumulated_text)})
+
+        def parse_seconds(ts: str) -> float:
+            parts = ts.split(":")
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+            elif len(parts) == 2:
+                return int(parts[0]) * 60 + float(parts[1])
+            return 0.0
+
+        def format_timestamp(seconds: float) -> str:
+            s = int(seconds)
+            m, s = divmod(s, 60)
+            h, m = divmod(m, 60)
+            if h > 0:
+                return f"{h:02d}:{m:02d}:{s:02d}"
+            return f"{m:02d}:{s:02d}"
+
+        segments: List[Dict[str, Any]] = []
+
+        if has_explicit_timestamps and parsed_items:
+            group_texts: List[str] = []
+            group_start = parsed_items[0]["start"]
+            group_end = group_start
+
+            for item in parsed_items:
+                t = item["text"].strip()
+                if not t:
+                    continue
+                group_texts.append(t)
+                group_end = item["start"]
+
+                word_count = sum(len(x.split()) for x in group_texts)
+                start_sec = parse_seconds(group_start)
+                end_sec = parse_seconds(group_end)
+
+                if word_count >= 100 or (end_sec - start_sec >= 50.0):
+                    fmt_start = group_start if len(group_start) >= 5 else f"0{group_start}"
+                    fmt_end = group_end if len(group_end) >= 5 else f"0{group_end}"
+                    segments.append({
+                        "content": " ".join(group_texts),
+                        "page_number": None,
+                        "slide_number": None,
+                        "timestamp_start": fmt_start,
+                        "timestamp_end": fmt_end,
+                    })
+                    group_texts = []
+                    group_start = item["start"]
+
+            if group_texts:
+                fmt_start = group_start if len(group_start) >= 5 else f"0{group_start}"
+                fmt_end = group_end if len(group_end) >= 5 else f"0{group_end}"
+                segments.append({
+                    "content": " ".join(group_texts),
+                    "page_number": None,
+                    "slide_number": None,
+                    "timestamp_start": fmt_start,
+                    "timestamp_end": fmt_end,
+                })
+        else:
+            words = cleaned_text.split()
+            chunk_size = 120
+            for idx, w_start in enumerate(range(0, len(words), chunk_size)):
+                chunk_words = words[w_start : w_start + chunk_size]
+                sec_start = idx * 60.0
+                sec_end = (idx + 1) * 60.0
+                segments.append({
+                    "content": " ".join(chunk_words),
+                    "page_number": None,
+                    "slide_number": None,
+                    "timestamp_start": format_timestamp(sec_start),
+                    "timestamp_end": format_timestamp(sec_end),
+                })
+
+        if not segments:
+            raise ValueError("Could not parse any readable content from the provided transcript text.")
+
+        logger.info(
+            f"Extracted {len(segments)} segments from manual lecture transcript '{video_title}' ({video_id})"
         )
         return video_title, video_id, segments
 

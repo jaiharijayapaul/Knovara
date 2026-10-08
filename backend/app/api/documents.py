@@ -106,6 +106,7 @@ async def ingest_youtube_video(
         user_id=current_user.id,
         url=payload.url,
         custom_title=payload.title,
+        manual_transcript=payload.manual_transcript,
     )
 
 

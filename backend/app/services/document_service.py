@@ -236,15 +236,24 @@ class DocumentService:
         user_id: str,
         url: str,
         custom_title: Optional[str] = None,
+        manual_transcript: Optional[str] = None,
     ) -> DocumentDetailResponse:
-        """Fetch YouTube video transcript, metadata, chunk semantics, and embed in knowledge base."""
+        """Fetch YouTube video transcript or process pasted transcript, chunk semantics, and embed in knowledge base."""
         course = cls._verify_course_ownership(db, course_id, user_id)
         course_topics = [t.name for t in course.topics]
 
         try:
-            video_title, video_id, extracted_units = await MultimodalExtractor.extract_youtube(
-                url=url, custom_title=custom_title
-            )
+            if manual_transcript and manual_transcript.strip():
+                logger.info(f"Processing user-pasted lecture transcript for course {course_id} (url={url})")
+                video_title, video_id, extracted_units = await MultimodalExtractor.extract_manual_transcript(
+                    raw_text=manual_transcript.strip(),
+                    url=url,
+                    custom_title=custom_title,
+                )
+            else:
+                video_title, video_id, extracted_units = await MultimodalExtractor.extract_youtube(
+                    url=url, custom_title=custom_title
+                )
         except Exception as e:
             logger.error(f"YouTube ingestion failed for url {url}: {e}")
             raise HTTPException(
