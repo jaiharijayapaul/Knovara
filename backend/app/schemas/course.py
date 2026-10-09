@@ -55,3 +55,54 @@ class CourseDetailResponse(CourseResponse):
     topics: List[TopicResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CourseFlowMapNode(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    order_index: int = 0
+    prerequisites: List[str] = []
+    p_know: float = 0.0
+    mastery_percentage: float = 0.0
+    is_mastered: bool = False
+    status: str = "available"  # "locked", "available", "in_progress", "mastered"
+    chunk_count: int = 0
+
+
+class CourseFlowMapEdge(BaseModel):
+    source: str
+    target: str
+    relationship: str = "prerequisite"
+
+
+class CourseFlowMapResponse(BaseModel):
+    course_id: str
+    course_name: str
+    subject: str
+    nodes: List[CourseFlowMapNode] = []
+    edges: List[CourseFlowMapEdge] = []
+    overall_progress_percentage: float = 0.0
+
+
+class StudyScheduleItem(BaseModel):
+    date: str  # YYYY-MM-DD
+    day_offset: int
+    topic: str
+    session_type: str  # "initial_study", "review_1", "review_2", "deep_practice", "final_cram"
+    retention_estimate: float  # Ebbinghaus R = e^(-t/S)
+    retention_percentage: float
+    urgency: str  # "high", "medium", "low"
+    recommended_duration_mins: int
+    suggested_action: str
+
+
+class StudyScheduleResponse(BaseModel):
+    course_id: str
+    course_name: str
+    target_exam_date: str
+    days_until_exam: int
+    daily_allocated_hours: float
+    schedule: List[StudyScheduleItem] = []
+    summary: str
+

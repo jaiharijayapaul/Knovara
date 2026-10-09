@@ -12,6 +12,7 @@ import httpx
 
 from app.config import settings
 from app.models.document import DocumentChunk
+from app.processing.speech_cleaner import clean_transcript_speech, clean_academic_sentence
 
 logger = logging.getLogger("knovara.flashcard_generator")
 
@@ -108,13 +109,14 @@ class FlashcardGenerator:
             f"{concepts_focus}"
             f"Create {num_cards} high-yield, concise study flashcards strictly grounded in these excerpts:\n\n"
             f"{grounding_text}\n\n"
-            f"REQUIREMENTS:\n"
-            f"1. Front: A crisp question, mathematical formula prompt, or conceptual distinction.\n"
-            f"2. Back: A concise, authoritative answer (1-3 sentences max) or formula.\n"
-            f"3. Hint: A helpful cognitive retrieval cue without giving away the exact answer.\n"
-            f"4. Citation: Reference the exact excerpt used.\n"
-            f"5. LANGUAGE REQUIREMENT: All flashcard questions, answers, and hints MUST be formulated strictly in clear English.\n"
-            f"6. Return ONLY a valid JSON list matching this structure:\n"
+            f"CRITICAL REQUIREMENTS:\n"
+            f"1. NO VERBATIM TRANSCRIPT REPETITION: The grounded excerpts may originate from spoken lecture transcripts or video captions. NEVER copy casual conversational speech, broken phrases, or speech filler (e.g., 'hello guys', 'in this video we see', 'okay so', 'as I said', 'you know').\n"
+            f"2. Front: A crisp academic question, mathematical formula prompt, or conceptual distinction testing genuine understanding.\n"
+            f"3. Back: A concise, authoritative textbook-grade answer (1-3 clear sentences) or formula. State the definition or rule directly.\n"
+            f"4. Hint: A helpful cognitive retrieval cue without giving away the exact answer.\n"
+            f"5. Citation: Reference the exact excerpt used.\n"
+            f"6. LANGUAGE REQUIREMENT: All flashcard questions, answers, and hints MUST be formulated strictly in clear English.\n"
+            f"7. Return ONLY a valid JSON list matching this structure:\n"
             f"[\n"
             f"  {{\n"
             f"    \"front\": \"...\",\n"
@@ -184,43 +186,45 @@ class FlashcardGenerator:
                     or course_name
                 )
 
-                # Extract key informational sentence from chunk
-                sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", chunk.content) if len(s.strip()) > 20]
+                # Extract and clean key informational sentence from chunk
+                clean_chunk_text = clean_transcript_speech(chunk.content) or chunk.content
+                raw_sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean_chunk_text) if len(s.strip()) > 15]
+                cleaned_sentences = [clean_academic_sentence(s) for s in raw_sentences if clean_academic_sentence(s)]
                 def_sentence = None
-                for s in sentences:
+                for s in cleaned_sentences:
                     if any(kw in s.lower() for kw in [" is ", " are ", " refers to ", " defined as ", " means ", " occurs when ", " formulation ", " principle ", " key "]):
                         def_sentence = s
                         break
-                if not def_sentence and sentences:
-                    def_sentence = sentences[0]
+                if not def_sentence and cleaned_sentences:
+                    def_sentence = cleaned_sentences[0]
                 elif not def_sentence:
-                    def_sentence = chunk.content[:200]
+                    def_sentence = clean_academic_sentence(clean_chunk_text[:200])
 
                 level = bloom_levels[i % len(bloom_levels)]
                 if level == "remember":
-                    front = f"According to {doc_name} ({coord_str}), what is the foundational definition or role of {concept}?"
+                    front = f"In {doc_name} ({coord_str}), what is the primary definition or governing role of {concept}?"
                     back = def_sentence
-                    hint = f"Focus on how {concept} is introduced in {coord_str}."
+                    hint = f"Recall how {concept} is formally introduced in {coord_str}."
                 elif level == "understand":
-                    front = f"In {doc_name} ({coord_str}), how is the mechanism of {concept} explained?"
+                    front = f"According to {doc_name} ({coord_str}), how does the mechanism of {concept} operate?"
                     back = def_sentence
-                    hint = f"Consider the explanation provided in {coord_str}."
+                    hint = f"Focus on the underlying principle described in {coord_str}."
                 elif level == "apply":
-                    front = f"How is {concept} applied or calculated based on the discussion in {doc_name} ({coord_str})?"
+                    front = f"When utilizing {concept} to resolve practical problems as outlined in {doc_name} ({coord_str}), what procedure must be followed?"
                     back = def_sentence
                     hint = f"Review the operational steps in {coord_str}."
                 elif level == "analyze":
-                    front = f"What key trade-off, distinction, or characteristic of {concept} is emphasized in {doc_name} ({coord_str})?"
+                    front = f"What critical trade-off or distinguishing feature of {concept} is emphasized in {doc_name} ({coord_str})?"
                     back = def_sentence
-                    hint = f"Analyze the attributes described in {coord_str}."
+                    hint = f"Analyze the core attributes specified in {coord_str}."
                 elif level == "evaluate":
-                    front = f"What criteria or condition in {doc_name} ({coord_str}) governs the validity or performance of {concept}?"
+                    front = f"What condition or criterion in {doc_name} ({coord_str}) determines the validity or effectiveness of {concept}?"
                     back = def_sentence
-                    hint = f"Evaluate the requirements in {coord_str}."
+                    hint = f"Examine the evaluative criteria highlighted in {coord_str}."
                 else:
-                    front = f"How does {concept} integrate into the broader methodology presented in {doc_name} ({coord_str})?"
+                    front = f"How does {concept} integrate into the overarching methodology presented in {doc_name} ({coord_str})?"
                     back = def_sentence
-                    hint = f"Reflect on the synthesis in {coord_str}."
+                    hint = f"Synthesize the system framework in {coord_str}."
 
                 cards.append({
                     "front": front,

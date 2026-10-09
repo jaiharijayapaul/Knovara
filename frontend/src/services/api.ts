@@ -10,6 +10,8 @@ import type {
   CourseCreatePayload,
   Topic,
   TopicCreatePayload,
+  CourseFlowMapResponse,
+  StudyScheduleResponse,
 } from '@/types/course';
 import type {
   DocumentItem,
@@ -680,4 +682,19 @@ export const fetchAdminActivity = async (limit: number = 25): Promise<AdminActiv
   });
   return response.data;
 };
+
+// Prerequisite Course Flow Map & Ebbinghaus Spaced Study Schedule
+export const fetchCourseFlowMap = async (courseId: string): Promise<CourseFlowMapResponse> => {
+  const response = await api.get<CourseFlowMapResponse>(`/courses/${courseId}/flow-map`);
+  return response.data;
+};
+
+export const fetchStudySchedule = async (courseId: string, targetExamDate?: string): Promise<StudyScheduleResponse> => {
+  const url = targetExamDate
+    ? `/courses/${courseId}/study-schedule?target_exam_date=${targetExamDate}`
+    : `/courses/${courseId}/study-schedule`;
+  const response = await api.get<StudyScheduleResponse>(url);
+  return response.data;
+};
+
 

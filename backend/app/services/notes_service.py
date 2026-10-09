@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.document import Document, DocumentChunk
 from app.models.course import Course
+from app.processing.speech_cleaner import clean_transcript_speech, clean_academic_sentence
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,11 @@ class NotesService:
             f"You are an expert, friendly AI Study Guide Creator for students.\n"
             f"A student uploaded their learning material: '{doc_filename}' for the course '{course_name}'.\n\n"
             f"YOUR TASK: Read the provided material text below and create comprehensive, beautifully structured AI STUDY NOTES in SIMPLE, FRIENDLY, EASY-TO-UNDERSTAND words that any student can immediately understand and learn from.\n\n"
+            f"TRANSCRIPT & SPOKEN LECTURE TRANSFORMATION RULES (CRITICAL):\n"
+            f"1. NO VERBATIM TRANSCRIPT REPETITION: The uploaded content may originate from spoken lecture transcripts, video audio, or pasted subtitles. NEVER regurgitate raw spoken dialogue, greetings, or conversational filler (e.g., 'hello guys', 'in this video we are going to', 'okay so', 'as I said', 'like basically', 'you know what I mean').\n"
+            f"2. DO NOT DESCRIBE THE SPEAKER'S PROCESS: Never write phrases like 'the speaker explains', 'in this lecture the speaker says', or 'the professor talks about'. Instead, explain the ACTUAL SUBJECT MATTER directly.\n"
+            f"3. FORMAL ACADEMIC SYNTHESIS: Convert conversational remarks and spoken explanations into rigorous, beautifully formulated textbook-grade study notes. State definitions clearly, unpack mechanisms step-by-step, and provide clear analogies.\n"
+            f"4. COMPLETE CLARITY: Synthesize what each concept IS, how it operates, and why it matters, formatted in clean markdown.\n\n"
             f"LANGUAGE REQUIREMENT: You MUST formulate and write all study notes strictly in fluent, clear English. Even if the lecture excerpts or original document contain non-English words, translate and explain all concepts thoroughly in English.\n\n"
             f"REQUIRED STRUCTURE FOR THE NOTES:\n"
             f"# 📝 AI Study Notes: {doc_filename}\n\n"
@@ -213,7 +219,8 @@ class NotesService:
         """Call Gemini to synthesize a course master study guide."""
         prompt = (
             f"You are a friendly academic tutor.\n"
-            f"Create a unified Master Study Guide for the course '{course_name}' ({subject}) based on the student's uploaded notes.\n"
+            f"Create a unified Master Study Guide for the course '{course_name}' ({subject}) based on the student's uploaded notes.\n\n"
+            f"TRANSCRIPT SYNTHESIS RULE: If excerpts originate from spoken lecture transcripts or video captions, do NOT repeat conversational filler or speak about the video/speaker. Synthesize the core academic concepts directly into authoritative, beautifully structured master study notes.\n\n"
             f"LANGUAGE REQUIREMENT: Formulate the entire study guide strictly in fluent, clear English.\n"
             f"Use simple words, clear headings, bullet points, real-world analogies, and quick self-tests.\n\n"
             f"EXCERPTS:\n{content[:8000]}\n\n"
@@ -250,10 +257,15 @@ class NotesService:
                 if c.slide_number
                 else f"Section {i}"
             )
-            raw = c.content.strip()
-            # Grab first 2 clean sentences
-            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", raw) if len(s.strip()) > 15]
-            core = sentences[0] if sentences else raw[:150]
+            raw = clean_transcript_speech(c.content.strip()) or c.content.strip()
+            # Grab first 2 clean academic sentences
+            all_sentences = [
+                clean_academic_sentence(s.strip())
+                for s in re.split(r"(?<=[.!?])\s+", raw)
+                if len(s.strip()) > 15
+            ]
+            sentences = [s for s in all_sentences if s and len(s) > 15]
+            core = sentences[0] if sentences else clean_academic_sentence(raw[:150])
             extra = sentences[1] if len(sentences) > 1 else ""
             sections.append((loc, core, extra, c.topic or "Core Concept"))
 

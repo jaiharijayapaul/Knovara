@@ -204,3 +204,42 @@ async def synthesize_course_materials(
     return await SynthesisService.synthesize_workspace(
         db=db, course_id=course_id, user_id=current_user.id
     )
+
+
+@router.get(
+    "/{course_id}/flow-map",
+    status_code=status.HTTP_200_OK,
+    summary="Get curriculum prerequisite flow map and DAG",
+    description="Returns topics DAG with prerequisite relationships and student BKT mastery levels.",
+)
+def get_course_flow_map(
+    course_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve curriculum flow map."""
+    return CourseService.get_course_flow_map(
+        db=db, course_id=course_id, user_id=current_user.id
+    )
+
+
+@router.get(
+    "/{course_id}/study-schedule",
+    status_code=status.HTTP_200_OK,
+    summary="Get Ebbinghaus spaced-repetition study schedule",
+    description="Generates an adaptive revision calendar based on memory retention decay R = e^(-t/S) and BKT mastery.",
+)
+def get_study_schedule(
+    course_id: str,
+    target_exam_date: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve spaced repetition revision calendar."""
+    return CourseService.get_study_schedule(
+        db=db,
+        course_id=course_id,
+        user_id=current_user.id,
+        target_exam_date=target_exam_date,
+    )
+

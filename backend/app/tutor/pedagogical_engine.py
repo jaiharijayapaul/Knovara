@@ -5,6 +5,7 @@ import httpx
 from typing import List, Dict, Any, Tuple, AsyncGenerator
 from app.config import settings
 from app.schemas.rag import SourceCitation
+from app.processing.speech_cleaner import clean_transcript_speech, clean_academic_sentence
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class PedagogicalEngine:
         history: List[Dict[str, str]],
         course_name: str,
         topic: str | None = None,
+        language: str = "english",
     ) -> Tuple[str, List[SourceCitation]]:
         """
         Generate next tutor dialogue turn.
@@ -80,6 +82,7 @@ class PedagogicalEngine:
                     course_name=course_name,
                     topic=topic,
                     api_key=api_key,
+                    language=language,
                 )
                 if gemini_reply:
                     return gemini_reply, citations
@@ -94,6 +97,7 @@ class PedagogicalEngine:
             history=history,
             course_name=course_name,
             topic=topic,
+            language=language,
         )
         return local_reply, citations
 
@@ -107,8 +111,9 @@ class PedagogicalEngine:
         course_name: str,
         topic: str | None = None,
         api_key: str = "",
+        language: str = "english",
     ) -> str:
-        """Execute multi-turn grounded tutoring with Google Gemini."""
+        """Execute multi-turn grounded tutoring with Google Gemini supporting English and Hinglish."""
         system_instruction = PEDAGOGICAL_PROMPTS[mode]
         context_parts = []
         for c in citations:
@@ -131,6 +136,20 @@ class PedagogicalEngine:
             role = "user" if turn["sender"] == "user" else "model"
             contents.append({"role": role, "parts": [{"text": turn["content"]}]})
 
+        if language.lower() == "hinglish":
+            lang_rule = (
+                "6. HINGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions in natural, encouraging Hinglish (a friendly blend of conversational Hindi written in Roman/Latin script with standard English technical terms).\n"
+                "   - Keep all technical terms, algorithm names, formulas, and academic variables in English (e.g. 'Gradient Descent', 'Learning Rate', 'Loss Function', 'Overfitting', 'Backpropagation').\n"
+                "   - Explain the intuition and reasoning in friendly conversational Hindi in Latin script (e.g. 'Gradient descent ek optimization technique hai jo loss function ko step-by-step kam karti hai...').\n"
+                "   - Retain exact inline source citations (e.g. [Doc 1: Page 42])."
+            )
+            response_trailer = "TUTOR RESPONSE (In Friendly Hinglish with English Technical Terms):"
+        else:
+            lang_rule = (
+                "6. STRICT ENGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions strictly in clear, fluent English. Even if the student communicates in another language or the lecture originated in another language, always teach and respond in English."
+            )
+            response_trailer = "TUTOR RESPONSE (In English):"
+
         current_prompt = (
             f"You are a friendly, encouraging AI Study Tutor for students studying '{course_name}' (Topic: {topic or 'General'}).\n"
             f"ACTIVE TEACHING MODE: {mode.upper()} ({system_instruction})\n\n"
@@ -138,7 +157,11 @@ class PedagogicalEngine:
             f"1. DIRECT AND FACTUAL ANSWER: When the student asks a question or asks to explain a concept, YOU MUST FIRST ANSWER THE QUESTION DIRECTLY, CORRECTLY, AND COMPLETELY using the facts, definitions, rules, and formulas in the grounded excerpts below. Do not respond with only questions! Provide the clear, accurate answer up front so the student learns what they asked about.\n"
             f"2. SIMPLE WORDS: Explain the answer in simple, crystal-clear, friendly language that any student can understand.\n"
             f"3. CITATIONS: Clearly cite the exact source tags (e.g. {citations[0].citation_label if citations else '[Doc 1]'}) for the facts you explain.\n"
-            f"4. TEACHING WRAP-UP ({mode.upper()}):\n"
+            f"4. TRANSCRIPT & SPOKEN LECTURE TRANSFORMATION: If the grounded excerpts are from spoken lecture transcripts or video captions:\n"
+            f"   - NEVER repeat or quote casual conversational speech, broken speech fragments, or verbal fillers (e.g., 'hello guys', 'in this video we will discuss', 'okay so', 'as I said', 'you know').\n"
+            f"   - Avoid saying 'the speaker says' or 'in the video the professor explains'.\n"
+            f"   - Teach the core academic concepts authoritatively, clearly, and engagingly as a master professor, explaining concepts from first principles.\n"
+            f"5. TEACHING WRAP-UP ({mode.upper()}):\n"
             f"   - If Socratic: Provide the complete direct answer first, and then wrap up with 1 friendly question to help them reflect on what they just learned.\n"
             f"   - If Analogy: Provide the direct answer first, and explain it with an everyday real-world analogy.\n"
             f"   - If First Principles: Break down the direct answer into simple foundational steps.\n"
@@ -146,10 +169,10 @@ class PedagogicalEngine:
             f"   - If Exam Prep: Provide the direct answer first, followed by key high-yield exam takeaways.\n"
             f"   - If Deep Dive: Provide a thorough, structured breakdown of the answer.\n"
             f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n"
-            f"5. STRICT ENGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions strictly in clear, fluent English. Even if the student communicates in another language or the lecture originated in another language, always teach and respond in English.\n\n"
+            f"{lang_rule}\n\n"
             f"GROUNDED COURSE EXCERPTS:\n{grounding_context}\n\n"
             f"STUDENT TURN: {user_message}\n\n"
-            f"TUTOR RESPONSE (In English):"
+            f"{response_trailer}"
         )
         contents.append({"role": "user", "parts": [{"text": current_prompt}]})
 
@@ -171,10 +194,12 @@ class PedagogicalEngine:
         history: List[Dict[str, str]],
         course_name: str,
         topic: str | None = None,
+        language: str = "english",
     ) -> AsyncGenerator[str, None]:
         """
         Stream tutor dialogue turn token-by-token using Gemini streaming API,
         or falling back gracefully to typewriter streaming of the pedagogical synthesis.
+        Supports English and Hinglish language modes.
         """
         mode = pedagogical_mode.lower()
         if mode not in PEDAGOGICAL_PROMPTS:
@@ -206,6 +231,20 @@ class PedagogicalEngine:
                     role = "user" if turn["sender"] == "user" else "model"
                     contents.append({"role": role, "parts": [{"text": turn["content"]}]})
 
+                if language.lower() == "hinglish":
+                    lang_rule = (
+                        "6. HINGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions in natural, encouraging Hinglish (a friendly blend of conversational Hindi written in Roman/Latin script with standard English technical terms).\n"
+                        "   - Keep all technical terms, algorithm names, formulas, and academic variables in English (e.g. 'Gradient Descent', 'Learning Rate', 'Loss Function', 'Overfitting', 'Backpropagation').\n"
+                        "   - Explain the intuition and reasoning in friendly conversational Hindi in Latin script.\n"
+                        "   - Retain exact inline source citations (e.g. [Doc 1: Page 42])."
+                    )
+                    response_trailer = "TUTOR RESPONSE (In Friendly Hinglish with English Technical Terms):"
+                else:
+                    lang_rule = (
+                        "6. STRICT ENGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions strictly in clear, fluent English. Even if the student communicates in another language or the lecture originated in another language, always teach and respond in English."
+                    )
+                    response_trailer = "TUTOR RESPONSE (In English):"
+
                 current_prompt = (
                     f"You are a friendly, encouraging AI Study Tutor for students studying '{course_name}' (Topic: {topic or 'General'}).\n"
                     f"ACTIVE TEACHING MODE: {mode.upper()} ({system_instruction})\n\n"
@@ -213,7 +252,11 @@ class PedagogicalEngine:
                     f"1. DIRECT AND FACTUAL ANSWER: When the student asks a question or asks to explain a concept, YOU MUST FIRST ANSWER THE QUESTION DIRECTLY, CORRECTLY, AND COMPLETELY using the facts, definitions, rules, and formulas in the grounded excerpts below. Do not respond with only questions! Provide the clear, accurate answer up front so the student learns what they asked about.\n"
                     f"2. SIMPLE WORDS: Explain the answer in simple, crystal-clear, friendly language that any student can understand.\n"
                     f"3. CITATIONS: Clearly cite the exact source tags (e.g. {citations[0].citation_label if citations else '[Doc 1]'}) for the facts you explain.\n"
-                    f"4. TEACHING WRAP-UP ({mode.upper()}):\n"
+                    f"4. TRANSCRIPT & SPOKEN LECTURE TRANSFORMATION: If the grounded excerpts are from spoken lecture transcripts or video captions:\n"
+                    f"   - NEVER repeat or quote casual conversational speech, broken speech fragments, or verbal fillers (e.g., 'hello guys', 'in this video we will discuss', 'okay so', 'as I said', 'you know').\n"
+                    f"   - Avoid saying 'the speaker says' or 'in the video the professor explains'.\n"
+                    f"   - Teach the core academic concepts authoritatively, clearly, and engagingly as a master professor, explaining concepts from first principles.\n"
+                    f"5. TEACHING WRAP-UP ({mode.upper()}):\n"
                     f"   - If Socratic: Provide the complete direct answer first, and then wrap up with 1 friendly question to help them reflect on what they just learned.\n"
                     f"   - If Analogy: Provide the direct answer first, and explain it with an everyday real-world analogy.\n"
                     f"   - If First Principles: Break down the direct answer into simple foundational steps.\n"
@@ -221,10 +264,10 @@ class PedagogicalEngine:
                     f"   - If Exam Prep: Provide the direct answer first, followed by key high-yield exam takeaways.\n"
                     f"   - If Deep Dive: Provide a thorough, structured breakdown of the answer.\n"
                     f"   - If Quick Review: Provide a rapid 3-point summary answering the question.\n"
-                    f"5. STRICT ENGLISH LANGUAGE REQUIREMENT: You MUST formulate all tutoring explanations, answers, feedback, and follow-up questions strictly in clear, fluent English. Even if the student communicates in another language or the lecture originated in another language, always teach and respond in English.\n\n"
+                    f"{lang_rule}\n\n"
                     f"GROUNDED COURSE EXCERPTS:\n{grounding_context}\n\n"
                     f"STUDENT TURN: {user_message}\n\n"
-                    f"TUTOR RESPONSE (In English):"
+                    f"{response_trailer}"
                 )
                 contents.append({"role": "user", "parts": [{"text": current_prompt}]})
 
@@ -260,6 +303,7 @@ class PedagogicalEngine:
                 history=history,
                 course_name=course_name,
                 topic=topic,
+                language=language,
             )
             words = local_reply.split(" ")
             for i, word in enumerate(words):
@@ -276,35 +320,87 @@ class PedagogicalEngine:
         history: List[Dict[str, str]],
         course_name: str,
         topic: str | None = None,
+        language: str = "english",
     ) -> str:
         """
         Synthesizes a distinct, high-quality educational response corresponding to the selected mode.
         Guarantees that the student's question is directly and factually answered first.
+        Supports English and Hinglish language modes.
         """
         primary = citations[0] if citations else None
         cite_tag = primary.citation_label if primary else "[Course Materials]"
-        primary_snippet = primary.snippet.strip("...") if primary else "Core curriculum materials."
+        raw_snippet = primary.snippet.strip("...") if primary else "Core curriculum materials."
+        clean_snip = clean_transcript_speech(raw_snippet) or raw_snippet
         topic_name = topic or (primary.topic if primary and primary.topic else "the curriculum")
 
         import re
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", primary_snippet) if len(s.strip()) > 10]
-        core_point = sentences[0] if sentences else primary_snippet
-        supporting_point = sentences[1] if len(sentences) > 1 else "Review this section carefully to connect it to the main ideas."
+        raw_sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean_snip) if len(s.strip()) > 10]
+        cleaned_sentences = [clean_academic_sentence(s) for s in raw_sentences if clean_academic_sentence(s)]
+        core_point = cleaned_sentences[0] if cleaned_sentences else clean_academic_sentence(clean_snip[:180])
+        supporting_point = cleaned_sentences[1] if len(cleaned_sentences) > 1 else "Review this core concept carefully to understand how it applies to practical problems."
         doc_label = primary.document_name if primary else "your uploaded notes"
 
+        if language.lower() == "hinglish":
+            direct_answer = (
+                f"### 💡 Course Materials se Direct Jawab ({doc_label} {cite_tag})\n\n"
+                f"**Mukhya Concept (Core Concept):** {core_point}\n\n"
+                f"**Spasht Explanation:** {supporting_point}\n\n"
+            )
+            if mode == "socratic":
+                return (
+                    f"{direct_answer}"
+                    f"### 🎯 Understanding Check (Samajh Parakh)\n"
+                    f"Ab jab humne course material se seedha concept samajh liya hai, aaiye milkar ispar sochte hain:\n"
+                    f"1. **{core_point}** ko dekhte hue, aapke hisab se **{topic_name}** ka main role kya hai?\n"
+                    f"2. Yeh concept baaki chapter se kaise connect hota hai?\n\n"
+                    f"*Apne shabdon mein bataiye, hum saath mein review karenge!*"
+                )
+            elif mode == "analogy":
+                return (
+                    f"{direct_answer}"
+                    f"#### 🍎 Rozmarra ki Analogy (Everyday Analogy)\n"
+                    f"Sochiye ki **{topic_name}** ek road trip ke GPS jaisa hai:\n"
+                    f"- Agar raste ke signs clear hain toh safar bina kisi bhatkav ke seedha hota hai.\n"
+                    f"- Aapke course materials ({doc_label} {cite_tag}) mein, {core_point} bilkul wahi sahi guidance deta hai!"
+                )
+            elif mode == "first_principles":
+                return (
+                    f"{direct_answer}"
+                    f"#### 🪜 Step-by-Step Foundation\n"
+                    f"1. **Step 1: Fundamental Rule** {cite_tag}: {core_point}\n"
+                    f"2. **Step 2: Yeh Kaise Kaam Karta Hai**: {supporting_point}\n"
+                    f"3. **Step 3: Key Takeaway**: In basic steps ko samajh kar aap koi bhi question solve kar sakte hain!"
+                )
+            elif mode == "exam_prep":
+                return (
+                    f"### 🎯 Exam & Quiz ke Zaroori Points: {topic_name}\n\n"
+                    f"- **Yaad Rakhne Layak Point** {cite_tag}:\n"
+                    f"  {core_point}\n\n"
+                    f"- **Important Details**:\n"
+                    f"  &bull; {supporting_point}\n\n"
+                    f"**Quick Practice Check**:\n"
+                    f"*Ek sentence mein batayein ki aap '{topic_name}' ko kaise explain karenge?*"
+                )
+            else:
+                return (
+                    f"### ⚡ Quick Summary: {topic_name}\n\n"
+                    f"- **Main Point** {cite_tag}: {core_point}\n"
+                    f"- **Key Takeaway**: {supporting_point}\n"
+                    f"- **Source Reference**: See **{doc_label}** {cite_tag} in your study material."
+                )
+
         direct_answer = (
-            f"### 💡 Answer from Your Notes ({doc_label} {cite_tag})\n\n"
-            f"**Key Fact:** {core_point}\n\n"
-            f"{supporting_point}\n\n"
-            f"> *\"{primary_snippet}\"*\n\n"
+            f"### 💡 Answer from Your Course Materials ({doc_label} {cite_tag})\n\n"
+            f"**Core Concept:** {core_point}\n\n"
+            f"**Key Explanation:** {supporting_point}\n\n"
         )
 
         if mode == "socratic":
             return (
                 f"{direct_answer}"
                 f"### 🎯 Understanding Check\n"
-                f"Now that we've covered the direct answer from your notes, let's reason through the mechanics together with two simple questions:\n"
-                f"1. Looking at *\"{core_point}\"*, what do you think is the main goal or outcome of **{topic_name}**?\n"
+                f"Now that we've covered the direct answer from your materials, let's reason through the mechanics together with two simple questions:\n"
+                f"1. Looking at **{core_point}**, what do you think is the main goal or outcome of **{topic_name}**?\n"
                 f"2. How does this connect to what you've learned in the rest of this chapter?\n\n"
                 f"*Try answering in your own words, and I'll help you check your reasoning!*"
             )
@@ -315,7 +411,7 @@ class PedagogicalEngine:
                 f"#### 🍎 Everyday Analogy\n"
                 f"Think of **{topic_name}** like a GPS navigation system on a road trip:\n"
                 f"- If you have clear, accurate road signs, your path is smooth and direct.\n"
-                f"- In your notes ({doc_label} {cite_tag}), {core_point} acts just like that map guiding you on the right path!"
+                f"- In your course materials ({doc_label} {cite_tag}), {core_point} acts just like that map guiding you on the right path!"
             )
 
         elif mode == "first_principles":
@@ -332,9 +428,9 @@ class PedagogicalEngine:
                 f"### 💡 Common Misconception on {topic_name}\n\n"
                 f"❌ **Common Trap**:\n"
                 f"Many students assume this concept is overly complicated or memorize formulas without understanding what they mean.\n\n"
-                f"✅ **What Your Notes Actually Tell Us** {cite_tag}:\n"
-                f"> \"{core_point}\"\n\n"
-                f"**How to remember easily:** Keep it simple! Remember that *{core_point}* is the central rule."
+                f"✅ **What Your Course Materials Actually Explain** {cite_tag}:\n"
+                f"**Rule:** {core_point}\n\n"
+                f"**How to remember easily:** Keep it simple! Remember that *{core_point}* is the central governing principle."
             )
 
         elif mode == "exam_prep":
@@ -353,7 +449,7 @@ class PedagogicalEngine:
             return (
                 f"### 🔍 Deep Dive: {topic_name}\n\n"
                 f"From your study material in **{doc_label}** {cite_tag}:\n\n"
-                f"> \"{primary_snippet}\"\n\n"
+                f"> \"{clean_snip}\"\n\n"
                 f"**Key Breakdown**:\n"
                 f"- **Core Concept**: {core_point}\n"
                 f"- **Context & Details**: {supporting_point}\n"

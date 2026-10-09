@@ -7,6 +7,7 @@ import httpx
 from typing import List, Tuple
 from app.config import settings
 from app.schemas.rag import SourceCitation
+from app.processing.speech_cleaner import clean_transcript_speech, clean_academic_sentence
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,8 @@ class GroundedGenerator:
             f"3. Base your facts strictly on the provided study material excerpts below.\n"
             f"4. Cite the exact source tags provided (e.g. {citations[0].citation_label}).\n"
             f"5. If the uploaded material does not contain the answer, politely and simply let the student know: 'I couldn't find this specific detail in your uploaded notes. Would you like to upload more pages or ask about what is covered?'\n"
-            f"6. STRICT ENGLISH REQUIREMENT: Formulate your answer, explanations, steps, and citations strictly in fluent, clear English. Even if the student's question is typed in another language or the study materials cite non-English words, always teach and answer strictly in English.\n\n"
+            f"6. TRANSCRIPT & LECTURE ADAPTATION: If excerpts originate from spoken lecture transcripts or video captions, do NOT copy conversational speech or filler (e.g., 'hello guys', 'in this video we see', 'okay so', 'as I said'). Formulate the educational content directly and authoritatively in formal, clear academic English.\n"
+            f"7. STRICT ENGLISH REQUIREMENT: Formulate your answer, explanations, steps, and citations strictly in fluent, clear English. Even if the student's question is typed in another language or the study materials cite non-English words, always teach and answer strictly in English.\n\n"
             f"STUDY MATERIAL EXCERPTS:\n{context_str}\n\n"
             f"STUDENT QUESTION: {query}\n\n"
             f"SIMPLE & CLEAR EXPLANATION (In English):"
@@ -117,9 +119,11 @@ class GroundedGenerator:
         supporting = citations[1:] if len(citations) > 1 else []
 
         raw_snippet = primary.snippet.strip("...")
-        # Break snippet into clean sentences
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", raw_snippet) if len(s.strip()) > 10]
-        main_idea = sentences[0] if sentences else raw_snippet
+        clean_snip = clean_transcript_speech(raw_snippet) or raw_snippet
+        # Break snippet into clean academic sentences
+        raw_sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean_snip) if len(s.strip()) > 10]
+        sentences = [clean_academic_sentence(s) for s in raw_sentences if clean_academic_sentence(s)]
+        main_idea = sentences[0] if sentences else clean_academic_sentence(clean_snip[:180])
         extra_detail = " ".join(sentences[1:3]) if len(sentences) > 1 else ""
 
         paragraphs = []

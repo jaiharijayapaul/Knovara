@@ -18,6 +18,7 @@ QuestionType = Literal[
     "multiple_select",
     "true_false",
     "short_answer",
+    "numerical",
 ]
 
 AssessmentDifficulty = Literal[

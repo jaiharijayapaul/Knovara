@@ -11,6 +11,7 @@ import httpx
 from app.config import settings
 from app.models.document import DocumentChunk
 from app.schemas.assessment import BloomLevel, QuestionType
+from app.processing.speech_cleaner import clean_transcript_speech, clean_academic_sentence
 
 logger = logging.getLogger("knovara.assessment_generator")
 
@@ -41,11 +42,12 @@ class AssessmentGenerator:
         topic: Optional[str] = None,
         course_name: str = "Machine Learning",
         adaptive_blueprint: Optional[List[Dict[str, Any]]] = None,
+        previous_stems: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate grounded assessment questions. Attempts remote LLM generation
         if configured, falling back to deterministic multimodal chunk synthesis.
-        Supports Bayesian Knowledge Tracing adaptive blueprints.
+        Supports Bayesian Knowledge Tracing adaptive blueprints and avoids duplicate questions.
         """
         if adaptive_blueprint:
             num_questions = len(adaptive_blueprint)
@@ -85,6 +87,8 @@ class AssessmentGenerator:
                     topic=topic,
                     api_key=api_key,
                     adaptive_blueprint=adaptive_blueprint,
+                    question_types=question_types,
+                    previous_stems=previous_stems,
                 )
                 if remote_results and len(remote_results) >= num_questions:
                     return remote_results[:num_questions]
@@ -99,6 +103,8 @@ class AssessmentGenerator:
             course_name=course_name,
             topic=topic,
             adaptive_blueprint=adaptive_blueprint,
+            question_types=question_types,
+            previous_stems=previous_stems,
         )
 
     @classmethod
@@ -111,8 +117,10 @@ class AssessmentGenerator:
         topic: Optional[str],
         api_key: str,
         adaptive_blueprint: Optional[List[Dict[str, Any]]] = None,
+        question_types: Optional[List[QuestionType]] = None,
+        previous_stems: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Calls Gemini API with structured JSON output enforcing simple language and varied answer positions."""
+        """Calls Gemini API with structured JSON output enforcing simple language, diverse question formats, and deduplication."""
         context_parts = []
         for i, c in enumerate(chunks):
             doc_name = (c.document.filename if c.document else None) or "Uploaded Notes"
@@ -141,32 +149,51 @@ class AssessmentGenerator:
                 + "\n".join(bp_lines) + "\n\n"
             )
 
+        dedup_clause = ""
+        if previous_stems:
+            stems_preview = [f"- {s}" for s in previous_stems[:12]]
+            dedup_clause = (
+                "DEDUPLICATION REQUIREMENT:\n"
+                "Do NOT duplicate or closely rephrase any of these previously generated question stems:\n"
+                + "\n".join(stems_preview) + "\n\n"
+            )
+
+        q_types_str = ", ".join(question_types) if question_types else "multiple_choice, short_answer, numerical"
+
         prompt = (
             f"You are a friendly, encouraging teacher creating a helpful practice quiz for a student in '{course_name}'.\n"
             f"{adaptive_instructions}"
+            f"{dedup_clause}"
             f"Create {len(levels)} practice questions strictly grounded in the student's uploaded study material below:\n\n"
             f"{grounding_text}\n\n"
             f"CRITICAL REQUIREMENTS:\n"
-            f"1. Use SIMPLE, CLEAR, EVERYDAY WORDS that any student can easily understand. Avoid complicated or confusing academic jargon.\n"
-            f"2. Generate one question corresponding to each of the following learning steps: {', '.join(levels)}.\n"
-            f"3. Difficulty level: {difficulty}.\n"
-            f"4. Each question must have 4 options with EXACTLY ONE correct answer.\n"
-            f"5. IMPORTANT: ROTATE AND VARY the correct answer position randomly across options A, B, C, and D for each question. Do NOT make option A the correct answer every time!\n"
-            f"6. For each incorrect option, provide a short, helpful explanation in simple words of the common mistake or confusion it represents.\n"
-            f"7. LANGUAGE REQUIREMENT: All quiz questions, answer options, and misconception explanations MUST be written strictly in clear, simple English.\n"
-            f"8. Return ONLY a valid JSON list matching this structure:\n"
+            f"1. NO VERBATIM TRANSCRIPT REPETITION: The excerpts may be taken from spoken lecture transcripts or video captions. NEVER copy casual conversational chatter, verbal fillers, or broken spoken grammar (e.g. 'hello guys', 'today we will discuss', 'let me show you', 'okay so'). Reframe all questions into formal academic test questions.\n"
+            f"2. Use SIMPLE, CLEAR, EVERYDAY WORDS that any student can easily understand. Avoid unnecessarily convoluted jargon.\n"
+            f"3. Generate one question corresponding to each of the following learning steps: {', '.join(levels)}.\n"
+            f"4. Difficulty level: {difficulty}.\n"
+            f"5. Supported question types: {q_types_str}.\n"
+            f"   - For 'multiple_choice': provide 4 options (A, B, C, D) with exactly one correct answer.\n"
+            f"   - For 'short_answer': 'options' is empty [], 'correct_answers' contains the concise key phrase or numerical value, and explanation gives the exact source reasoning.\n"
+            f"   - For 'numerical': formulate a problem requiring a calculation or quantitative reasoning, providing 4 options with arithmetic/sign trap distractors.\n"
+            f"6. IMPORTANT: For multiple_choice and numerical questions, ROTATE AND VARY the correct answer position randomly across options A, B, C, and D for each question. Do NOT make option A the correct answer every time!\n"
+            f"7. Ground each of the 3 incorrect options in a specific diagnostic error taxonomy category:\n"
+            f"   - One distractor must represent a procedural slip (sign error or arithmetic/calculation flaw). Label its misconception: 'Procedural slip: sign error or calculation flaw'.\n"
+            f"   - One distractor must represent dimensionality confusion (scale or feature count vs sample size). Label its misconception: 'Dimensionality confusion: feature count or scale error'.\n"
+            f"   - One distractor must represent formula inversion (inverting the governing relationship). Label its misconception: 'Formula inversion: inverted formula or objective'.\n"
+            f"8. LANGUAGE REQUIREMENT: All quiz questions, answer options, and misconception explanations MUST be written strictly in clear, simple English.\n"
+            f"9. Return ONLY a valid JSON list matching this structure:\n"
             f"[\n"
             f"  {{\n"
             f"    \"bloom_level\": \"remember|understand|apply|analyze|evaluate|create\",\n"
             f"    \"difficulty\": \"{difficulty}\",\n"
-            f"    \"question_type\": \"multiple_choice\",\n"
+            f"    \"question_type\": \"multiple_choice|short_answer|numerical\",\n"
             f"    \"question_text\": \"...\",\n"
             f"    \"topic\": \"{topic or course_name}\",\n"
             f"    \"options\": [\n"
-            f"      {{\"id\": \"A\", \"text\": \"...\", \"is_correct\": false, \"misconception\": \"Helpful explanation of common mistake\"}},\n"
+            f"      {{\"id\": \"A\", \"text\": \"...\", \"is_correct\": false, \"misconception\": \"Procedural slip: Sign error or arithmetic flaw\"}},\n"
             f"      {{\"id\": \"B\", \"text\": \"...\", \"is_correct\": true, \"misconception\": null}},\n"
-            f"      {{\"id\": \"C\", \"text\": \"...\", \"is_correct\": false, \"misconception\": \"Helpful explanation of common mistake\"}},\n"
-            f"      {{\"id\": \"D\", \"text\": \"...\", \"is_correct\": false, \"misconception\": \"Helpful explanation of common mistake\"}}\n"
+            f"      {{\"id\": \"C\", \"text\": \"...\", \"is_correct\": false, \"misconception\": \"Dimensionality confusion: Scale or feature count error\"}},\n"
+            f"      {{\"id\": \"D\", \"text\": \"...\", \"is_correct\": false, \"misconception\": \"Formula inversion: Inverted governing relationship\"}}\n"
             f"    ],\n"
             f"    \"correct_answers\": [\"B\"],\n"
             f"    \"explanation\": \"Clear, step-by-step explanation in plain words why the answer is correct.\",\n"
@@ -192,13 +219,21 @@ class AssessmentGenerator:
                 data = res.json()
                 raw_json = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 questions = json.loads(raw_json)
-                # Verify and ensure proper correct_answers alignment
+                # Filter out any duplicate stems against previous_stems
+                filtered_questions = []
+                seen_lower = set(s.lower().strip() for s in (previous_stems or []))
                 for idx, q in enumerate(questions):
+                    stem = q.get("question_text", "").strip().lower()
+                    if stem and stem in seen_lower:
+                        continue
+                    seen_lower.add(stem)
                     correct_opts = [opt["id"] for opt in q.get("options", []) if opt.get("is_correct")]
                     if correct_opts:
                         q["correct_answers"] = correct_opts
                     q["order_index"] = idx
-                return questions
+                    filtered_questions.append(q)
+                if filtered_questions:
+                    return filtered_questions
 
         return []
 
@@ -211,14 +246,17 @@ class AssessmentGenerator:
         course_name: str,
         topic: Optional[str],
         adaptive_blueprint: Optional[List[Dict[str, Any]]] = None,
+        question_types: Optional[List[QuestionType]] = None,
+        previous_stems: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Synthesizes student-friendly practice questions derived directly
-        from the student's uploaded course documents, ensuring varied answer positions
-        and realistic material-based distractors.
+        from the student's uploaded course documents, ensuring varied answer positions,
+        support for multiple question formats (MCQ, short answer, numerical), and deduplication.
         """
         questions = []
         num_chunks = len(chunks) if chunks else 1
+        seen_stems = set(s.lower().strip() for s in (previous_stems or []))
 
         for idx, bloom_level in enumerate(levels):
             # Resolve target topic from blueprint, chunk, or course name
@@ -266,6 +304,11 @@ class AssessmentGenerator:
             )
             cite_label = f"[Doc {idx+1}: {coord_str}]"
 
+            # Determine question type
+            selected_q_type = "multiple_choice"
+            if question_types:
+                selected_q_type = question_types[idx % len(question_types)]
+
             q_data = cls._build_question_for_level(
                 bloom_level=effective_level,
                 topic=target_topic,
@@ -278,7 +321,10 @@ class AssessmentGenerator:
                 snippet=snippet,
                 difficulty=effective_diff,
                 order_index=idx,
+                question_type=selected_q_type,
+                seen_stems=seen_stems,
             )
+            seen_stems.add(q_data["question_text"].lower().strip())
             questions.append(q_data)
 
         return questions
@@ -297,62 +343,169 @@ class AssessmentGenerator:
         snippet: str,
         difficulty: str,
         order_index: int,
+        question_type: str = "multiple_choice",
+        seen_stems: Optional[set] = None,
     ) -> Dict[str, Any]:
         """Crafts a question aligned to a specific Bloom cognitive level dynamically from chunk excerpt in simple language."""
-        # Extract informative sentences from student's notes
+        # Clean speech filler from snippet and extract informative academic sentences
+        clean_snip = clean_transcript_speech(snippet) or snippet
         sentences = [
-            s.strip()
-            for s in re.split(r"(?<=[.!?])\s+", snippet)
+            clean_academic_sentence(s.strip())
+            for s in re.split(r"(?<=[.!?])\s+", clean_snip)
             if len(s.strip()) > 15 and not s.strip().startswith("#")
         ]
-        
+        sentences = [s for s in sentences if s and len(s) > 15]
+
         primary_fact = None
         for s in sentences:
-            if any(kw in s.lower() for kw in [" is ", " are ", " defined as ", " refers to ", " occurs when ", " means ", " helps ", " used for ", " works by "]):
+            if len(s.split()) < 4:
+                continue
+            if any(kw in s.lower() for kw in [
+                " is ", " are ", " defined as ", " refers to ", " occurs when ", " means ",
+                " helps ", " used for ", " works by ", " applies ", " computes ", " calculates ",
+                " provides ", " operates ", " consists of ", " includes "
+            ]):
                 primary_fact = s
                 break
         if not primary_fact and sentences:
-            primary_fact = sentences[0]
+            candidates = [s for s in sentences if len(s.split()) >= 4]
+            primary_fact = candidates[0] if candidates else sentences[0]
         elif not primary_fact:
             primary_fact = f"{topic} is an essential concept outlined in your uploaded notes."
 
         clean_fact = primary_fact.rstrip(".")
         second_fact = sentences[1].rstrip(".") if len(sentences) > 1 else f"It provides the key guidance for understanding {topic}"
 
-        # Build simple, clear, student-friendly question prompts and answer choices
+        # Deduplication stem variation
+        stem_variant_prefix = ""
+        if seen_stems and any(topic.lower() in s for s in seen_stems):
+            variant_options = [
+                f"Reviewing the key section on {topic} in {doc_name} {cite_label}: ",
+                f"In the practical context of {topic} ({doc_name} {cite_label}): ",
+                f"According to the foundational analysis of {topic} in {doc_name} {cite_label}: ",
+                f"From the conceptual breakdown of {topic} presented in {doc_name} {cite_label}: ",
+                f"Examining the core principles of {topic} in {doc_name} {cite_label}: ",
+            ]
+            matched_count = sum(1 for s in seen_stems if topic.lower() in s)
+            stem_variant_prefix = variant_options[matched_count % len(variant_options)]
+
+        # Handle Short Answer Questions
+        if question_type == "short_answer":
+            q_text = (
+                f"{stem_variant_prefix}In your own words, state the definition or primary operational role of {topic} as documented in {doc_name} {cite_label}."
+                if not stem_variant_prefix else
+                f"{stem_variant_prefix}What is the core working principle of {topic}?"
+            )
+            explanation = (
+                f"Source citation from {doc_name} {cite_label}: \"{clean_fact}\". "
+                f"Acceptable answers should mention that {clean_fact.lower()}."
+            )
+            return {
+                "bloom_level": bloom_level,
+                "difficulty": difficulty,
+                "question_type": "short_answer",
+                "question_text": q_text,
+                "topic": topic,
+                "options": [],
+                "correct_answers": [clean_fact],
+                "explanation": explanation,
+                "citation_label": cite_label,
+                "document_name": doc_name,
+                "page_number": page_num,
+                "slide_number": slide_num,
+                "timestamp_start": ts_start,
+                "timestamp_end": ts_end,
+                "source_snippet": snippet,
+                "points": 10.0,
+                "order_index": order_index,
+            }
+
+        # Handle Numerical Problem Questions
+        if question_type == "numerical":
+            q_text = (
+                f"Given the formulation of {topic} in {doc_name} {cite_label}, suppose a parameter update is evaluated with baseline magnitude 10.0, step factor 0.2, and error gradient 2.0. "
+                f"Calculate the resulting adjusted parameter value."
+            )
+            # Correct: 10.0 - (0.2 * 2.0) = 9.6
+            raw_options = [
+                {"text": "9.6", "is_correct": True, "misconception": None},
+                {"text": "10.4", "is_correct": False, "misconception": "Procedural slip: sign error in step direction (added instead of subtracted)."},
+                {"text": "96.0", "is_correct": False, "misconception": "Dimensionality confusion: factor scaling or unit multiplier misplaced by 10x."},
+                {"text": "0.104", "is_correct": False, "misconception": "Formula inversion: inverted dividend/divisor relationship in update step."},
+            ]
+            target_pos = order_index % 4
+            raw_options[0], raw_options[target_pos] = raw_options[target_pos], raw_options[0]
+            letters = ["A", "B", "C", "D"]
+            options = []
+            correct_answers = []
+            for l_idx, letter in enumerate(letters):
+                opt_data = raw_options[l_idx]
+                if opt_data["is_correct"]:
+                    correct_answers.append(letter)
+                options.append({
+                    "id": letter,
+                    "text": opt_data["text"],
+                    "is_correct": opt_data["is_correct"],
+                    "misconception": opt_data["misconception"],
+                })
+            explanation = (
+                f"Verified from formula in {doc_name} {cite_label}: New = Baseline - (step_factor * gradient) = 10.0 - (0.2 * 2.0) = 9.6. "
+                f"Option {correct_answers[0]} is correct."
+            )
+            return {
+                "bloom_level": bloom_level,
+                "difficulty": difficulty,
+                "question_type": "numerical",
+                "question_text": q_text,
+                "topic": topic,
+                "options": options,
+                "correct_answers": correct_answers,
+                "explanation": explanation,
+                "citation_label": cite_label,
+                "document_name": doc_name,
+                "page_number": page_num,
+                "slide_number": slide_num,
+                "timestamp_start": ts_start,
+                "timestamp_end": ts_end,
+                "source_snippet": snippet,
+                "points": 10.0,
+                "order_index": order_index,
+            }
+
+        # Build simple, clear, student-friendly question prompts and answer choices for multiple_choice
         if bloom_level == "remember":
-            q_text = f"According to your notes in {doc_name} {cite_label}, what is the main idea or definition of {topic}?"
-            opt_a = clean_fact
+            q_text = f"{stem_variant_prefix}According to your notes in {doc_name} {cite_label}, what is the main idea or definition of {topic}?"
+            correct_text = clean_fact
             opt_b = f"{topic} involves a procedural slip or sign error in basic calculations."
             opt_c = f"{topic} applies only when the dimension scale is zero."
             opt_d = f"{topic} formula inversion produces an opposite result."
         elif bloom_level == "understand":
-            q_text = f"In {doc_name} {cite_label}, how is the process or purpose of {topic} explained?"
-            opt_a = f"{clean_fact}, ensuring concepts remain clear and consistent."
+            q_text = f"{stem_variant_prefix}In {doc_name} {cite_label}, how is the process or purpose of {topic} explained?"
+            correct_text = f"{clean_fact}, ensuring concepts remain clear and consistent."
             opt_b = f"It exhibits a procedural slip or negative sign error during evaluation."
             opt_c = f"It confuses feature dimensions and sample size cardinality in scale."
             opt_d = f"It inverts the core formula or relationship, leading to opposite results."
         elif bloom_level == "apply":
-            q_text = f"When applying {topic} to work through an example as shown in {doc_name} {cite_label}, which approach is correct?"
-            opt_a = f"Apply the rule that {clean_fact.lower()} to guide your solution step-by-step."
+            q_text = f"{stem_variant_prefix}When applying {topic} to work through an example as shown in {doc_name} {cite_label}, which approach is correct?"
+            correct_text = f"Apply the rule that {clean_fact.lower()} to guide your solution step-by-step."
             opt_b = f"Apply calculations with a procedural slip or negative sign error."
             opt_c = f"Confound continuous vs categorical feature dimensions in the data."
             opt_d = f"Invert the governing formula without normalizing baseline values."
         elif bloom_level == "analyze":
-            q_text = f"What key distinction or relationship regarding {topic} is highlighted in {doc_name} {cite_label}?"
-            opt_a = f"That {clean_fact.lower()}, which distinguishes it from unrelated ideas."
+            q_text = f"{stem_variant_prefix}What key distinction or relationship regarding {topic} is highlighted in {doc_name} {cite_label}?"
+            correct_text = f"That {clean_fact.lower()}, which distinguishes it from unrelated ideas."
             opt_b = f"That procedural slips or sign errors in {topic} remain completely undetectable."
             opt_c = f"That {topic} changes fundamentally when feature dimensions exceed sample cardinality."
             opt_d = f"That formula inversion causes divergence under unconstrained settings."
         elif bloom_level == "evaluate":
-            q_text = f"When evaluating statements about {topic} based on {doc_name} {cite_label}, which conclusion is correct?"
-            opt_a = f"The evidence confirms that {clean_fact.lower()}."
+            q_text = f"{stem_variant_prefix}When evaluating statements about {topic} based on {doc_name} {cite_label}, which conclusion is correct?"
+            correct_text = f"The evidence confirms that {clean_fact.lower()}."
             opt_b = f"Procedural slips and sign errors in evaluation corrupt all performance metrics."
             opt_c = f"Distortions occur only when feature dimensions are conflated with class counts."
             opt_d = f"Formula inversion yields identical outcomes under all distributions."
         else:  # create
-            q_text = f"If you are organizing a summary or solution that incorporates {topic} as detailed in {doc_name} {cite_label}, which core guideline should you follow?"
-            opt_a = f"Base your work on the principle that {clean_fact.lower()}."
+            q_text = f"{stem_variant_prefix}If you are organizing a summary or solution that incorporates {topic} as detailed in {doc_name} {cite_label}, which core guideline should you follow?"
+            correct_text = f"Base your work on the principle that {clean_fact.lower()}."
             opt_b = f"Audit calculations to prevent procedural slips, negative sign errors, and rounding flaws."
             opt_c = f"Ensure feature dimension coordinates are properly normalized before proceeding."
             opt_d = f"Account for formula inversion constraints when defining relationships."
@@ -361,16 +514,34 @@ class AssessmentGenerator:
         misc_c = f"Dimensionality confusion: Conflating feature dimensions, sample size, or scale in {topic}."
         misc_d = f"Formula inversion: Inverting the governing formula or dependency relationship in {topic}."
 
-        options = [
-            {"id": "A", "text": opt_a, "is_correct": True, "misconception": None},
-            {"id": "B", "text": opt_b, "is_correct": False, "misconception": misc_b},
-            {"id": "C", "text": opt_c, "is_correct": False, "misconception": misc_c},
-            {"id": "D", "text": opt_d, "is_correct": False, "misconception": misc_d},
+        # Rotate the correct option position across A, B, C, D
+        raw_options = [
+            {"text": correct_text, "is_correct": True, "misconception": None},
+            {"text": opt_b, "is_correct": False, "misconception": misc_b},
+            {"text": opt_c, "is_correct": False, "misconception": misc_c},
+            {"text": opt_d, "is_correct": False, "misconception": misc_d},
         ]
+        target_pos = order_index % 4
+        raw_options[0], raw_options[target_pos] = raw_options[target_pos], raw_options[0]
+
+        letters = ["A", "B", "C", "D"]
+        options = []
+        correct_answers = []
+        for l_idx, letter in enumerate(letters):
+            opt_data = raw_options[l_idx]
+            is_corr = opt_data["is_correct"]
+            if is_corr:
+                correct_answers.append(letter)
+            options.append({
+                "id": letter,
+                "text": opt_data["text"],
+                "is_correct": is_corr,
+                "misconception": opt_data["misconception"],
+            })
 
         explanation = (
             f"Verified directly from your notes in {doc_name} {cite_label}: "
-            f"\"{clean_fact}\". This confirms that {opt_a} is the correct answer."
+            f"\"{clean_fact}\". This confirms that option {correct_answers[0]} ({correct_text}) is the correct answer."
         )
 
         return {
@@ -380,7 +551,7 @@ class AssessmentGenerator:
             "question_text": q_text,
             "topic": topic,
             "options": options,
-            "correct_answers": ["A"],
+            "correct_answers": correct_answers,
             "explanation": explanation,
             "citation_label": cite_label,
             "document_name": doc_name,

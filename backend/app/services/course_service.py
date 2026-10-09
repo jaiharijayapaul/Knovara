@@ -198,4 +198,213 @@ class CourseService:
         logger.info(f"Seeded demo course '{course.name}' with {len(demo_topics)} topics for user {user_id}")
         return CourseService.get_course_detail(db, course.id, user_id)
 
+    @staticmethod
+    def get_course_flow_map(db: Session, course_id: str, user_id: str):
+        """
+        Builds the prerequisite curriculum Directed Acyclic Graph (DAG) flow map
+        incorporating live Bayesian Knowledge Tracing (BKT) concept mastery.
+        """
+        import math
+        from app.schemas.course import (
+            CourseFlowMapNode,
+            CourseFlowMapEdge,
+            CourseFlowMapResponse,
+        )
+        from app.repositories.mastery_repository import MasteryRepository
+
+        course = CourseRepository.get_by_id(db, course_id, user_id=user_id)
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course workspace not found.",
+            )
+
+        topics = course.topics or []
+        mastery_records = MasteryRepository.get_all_for_course(db, user_id=user_id, course_id=course_id)
+        mastery_by_topic = {m.concept_label.lower().strip(): m for m in mastery_records}
+
+        nodes = []
+        edges = []
+        total_p_know = 0.0
+
+        for idx, topic in enumerate(topics):
+            m = mastery_by_topic.get(topic.name.lower().strip())
+            p_know = m.p_know if m else 0.25
+            is_mastered = m.is_mastered if m else False
+            total_p_know += p_know
+
+            # Determine prerequisites
+            prereqs = []
+            if topic.parent_topic_id:
+                prereqs.append(topic.parent_topic_id)
+            elif idx > 0:
+                # Sequential curriculum prerequisite chain
+                prereqs.append(topics[idx - 1].id)
+
+            # Node status based on mastery and prerequisites
+            if is_mastered or p_know >= 0.90:
+                node_status = "mastered"
+            elif p_know >= 0.50:
+                node_status = "in_progress"
+            elif idx == 0 or (idx > 0 and (mastery_by_topic.get(topics[idx - 1].name.lower().strip(), None) and mastery_by_topic[topics[idx - 1].name.lower().strip()].p_know >= 0.45)):
+                node_status = "available"
+            else:
+                node_status = "locked"
+
+            # Count chunks for this topic
+            chunk_count = sum(
+                1 for doc in course.documents
+                for c in doc.chunks
+                if (c.topic and topic.name.lower() in c.topic.lower()) or topic.name.lower() in c.content.lower()
+            )
+
+            nodes.append(
+                CourseFlowMapNode(
+                    id=topic.id,
+                    name=topic.name,
+                    description=topic.description,
+                    order_index=idx,
+                    prerequisites=prereqs,
+                    p_know=round(p_know, 3),
+                    mastery_percentage=round(p_know * 100, 1),
+                    is_mastered=is_mastered,
+                    status=node_status,
+                    chunk_count=chunk_count,
+                )
+            )
+
+            # Build edges
+            if topic.parent_topic_id:
+                edges.append(
+                    CourseFlowMapEdge(
+                        source=topic.parent_topic_id,
+                        target=topic.id,
+                        relationship="subtopic",
+                    )
+                )
+            elif idx > 0:
+                edges.append(
+                    CourseFlowMapEdge(
+                        source=topics[idx - 1].id,
+                        target=topic.id,
+                        relationship="prerequisite",
+                    )
+                )
+
+        avg_progress = round((total_p_know / len(topics)) * 100, 1) if topics else 0.0
+
+        return CourseFlowMapResponse(
+            course_id=course.id,
+            course_name=course.name,
+            subject=course.subject,
+            nodes=nodes,
+            edges=edges,
+            overall_progress_percentage=avg_progress,
+        )
+
+    @staticmethod
+    def get_study_schedule(db: Session, course_id: str, user_id: str, target_exam_date: str = None):
+        """
+        Generates an adaptive spaced-repetition study schedule based on
+        the Hermann Ebbinghaus forgetting curve R = e^(-t/S) and BKT mastery state.
+        """
+        import math
+        from datetime import datetime, timezone, timedelta
+        from app.schemas.course import StudyScheduleItem, StudyScheduleResponse
+        from app.repositories.mastery_repository import MasteryRepository
+
+        course = CourseRepository.get_by_id(db, course_id, user_id=user_id)
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course workspace not found.",
+            )
+
+        now = datetime.now(timezone.utc)
+        if target_exam_date:
+            try:
+                exam_dt = datetime.strptime(target_exam_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                exam_dt = now + timedelta(days=14)
+        else:
+            exam_dt = now + timedelta(days=14)
+
+        days_until_exam = max(1, (exam_dt - now).days)
+        topics = course.topics or []
+        mastery_records = MasteryRepository.get_all_for_course(db, user_id=user_id, course_id=course_id)
+        mastery_by_topic = {m.concept_label.lower().strip(): m for m in mastery_records}
+
+        schedule_items = []
+
+        # Sort topics by BKT priority: lowest mastery first
+        def topic_sort_key(t):
+            rec = mastery_by_topic.get(t.name.lower().strip())
+            return rec.p_know if rec else 0.25
+
+        sorted_topics = sorted(topics, key=topic_sort_key)
+
+        for day in range(min(days_until_exam, 14)):
+            sched_date = (now + timedelta(days=day)).strftime("%Y-%m-%d")
+            # Select topic for day based on cycle and spaced interval
+            target_topic = sorted_topics[day % len(sorted_topics)] if sorted_topics else None
+            if not target_topic:
+                continue
+
+            rec = mastery_by_topic.get(target_topic.name.lower().strip())
+            p_know = rec.p_know if rec else 0.25
+            attempts = rec.total_attempts if rec else 1
+
+            # Ebbinghaus stability S: increases with repetitions and knowledge probability
+            stability_s = max(1.0, 1.5 * (1.0 + attempts * 0.8) * (0.4 + p_know * 1.2))
+            # Retention R = e^(-t / S) where t is simulated days since initial exposure
+            t_elapsed = float(day + 1)
+            retention_r = math.exp(-t_elapsed / stability_s)
+            retention_pct = round(retention_r * 100, 1)
+
+            if p_know < 0.40:
+                session_type = "initial_study" if day < 3 else "deep_practice"
+                urgency = "high"
+                duration = 45
+                action = f"Socratic AI Tutor review on foundational definitions of {target_topic.name} and diagnostic practice."
+            elif p_know < 0.70:
+                session_type = "review_1" if day < 7 else "review_2"
+                urgency = "medium"
+                duration = 30
+                action = f"Diagnostic quiz attempt to uncover procedural or sign slip misconceptions in {target_topic.name}."
+            else:
+                session_type = "review_2" if day < 10 else "final_cram"
+                urgency = "low"
+                duration = 20
+                action = f"Rapid active recall flashcard session and high-yield formula check for {target_topic.name}."
+
+            schedule_items.append(
+                StudyScheduleItem(
+                    date=sched_date,
+                    day_offset=day,
+                    topic=target_topic.name,
+                    session_type=session_type,
+                    retention_estimate=round(retention_r, 4),
+                    retention_percentage=retention_pct,
+                    urgency=urgency,
+                    recommended_duration_mins=duration,
+                    suggested_action=action,
+                )
+            )
+
+        summary_text = (
+            f"Personalized {days_until_exam}-day Ebbinghaus spaced revision plan for '{course.name}'. "
+            f"Prioritizes lowest BKT mastery concepts first to counter memory decay before the target exam date."
+        )
+
+        return StudyScheduleResponse(
+            course_id=course.id,
+            course_name=course.name,
+            target_exam_date=exam_dt.strftime("%Y-%m-%d"),
+            days_until_exam=days_until_exam,
+            daily_allocated_hours=round(sum(s.recommended_duration_mins for s in schedule_items) / (len(schedule_items) * 60.0), 1) if schedule_items else 0.5,
+            schedule=schedule_items,
+            summary=summary_text,
+        )
+
+
 

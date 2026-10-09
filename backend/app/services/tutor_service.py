@@ -396,6 +396,7 @@ class TutorService:
         ]
 
         # 4. Generate next pedagogical response
+        reply_language = getattr(payload, "language", "english") or "english"
         reply_text, citations_used = await PedagogicalEngine.generate_turn(
             user_message=payload.content.strip(),
             pedagogical_mode=session.pedagogical_mode,
@@ -403,6 +404,7 @@ class TutorService:
             history=history,
             course_name=course.name,
             topic=session.topic,
+            language=reply_language,
         )
 
         # 5. Persist assistant turn with serialized citations
@@ -415,6 +417,20 @@ class TutorService:
             pedagogical_mode=session.pedagogical_mode,
             citations_json=citations_json,
         )
+
+        # 6. Update Bayesian Knowledge Tracing (BKT) learner model from conversation
+        try:
+            from app.services.mastery_service import MasteryService
+            MasteryService.update_mastery_from_conversation(
+                db=db,
+                user_id=user_id,
+                course_id=course_id,
+                topic=session.topic,
+                user_message=payload.content.strip(),
+                tutor_response=reply_text,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update conversational BKT mastery: {e}")
 
         return cls._deserialize_message(assistant_msg)
 
@@ -473,6 +489,7 @@ class TutorService:
         ped_mode = session.pedagogical_mode
         topic = session.topic
         course_name = course.name
+        reply_language = getattr(payload, "language", "english") or "english"
 
         async def event_generator() -> AsyncGenerator[str, None]:
             # Emit citations first
@@ -486,6 +503,7 @@ class TutorService:
                 history=history,
                 course_name=course_name,
                 topic=topic,
+                language=reply_language,
             ):
                 accumulated_tokens.append(token)
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
@@ -506,6 +524,20 @@ class TutorService:
                 )
                 db_session.commit()
                 final_msg_dto = cls._deserialize_message(assistant_msg)
+
+                # Update conversational BKT mastery in DB
+                try:
+                    from app.services.mastery_service import MasteryService
+                    MasteryService.update_mastery_from_conversation(
+                        db=db_session,
+                        user_id=user_id,
+                        course_id=course_id,
+                        topic=topic,
+                        user_message=payload.content.strip(),
+                        tutor_response=full_reply,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to update conversational BKT mastery in stream: {e}")
 
             yield f"data: {json.dumps({'type': 'done', 'message': final_msg_dto.model_dump(mode='json')})}\n\n"
 

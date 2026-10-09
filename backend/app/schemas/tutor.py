@@ -59,6 +59,7 @@ class TutorSessionUpdateMode(BaseModel):
 class TutorMessageCreate(BaseModel):
     """Student conversational turn message payload."""
     content: str = Field(..., min_length=1, description="Student question, answer, or thought")
+    language: Optional[str] = Field("english", description="Preferred response language: 'english' or 'hinglish'")
 
 
 class TutorMessageResponse(BaseModel):

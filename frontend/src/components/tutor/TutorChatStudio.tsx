@@ -61,6 +61,9 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
   const [currentMode, setCurrentMode] = useState<PedagogicalMode>('socratic');
   const [isUpdatingMode, setIsUpdatingMode] = useState<boolean>(false);
 
+  // Language Mode (Req 6d: English vs Hinglish)
+  const [languageMode, setLanguageMode] = useState<'english' | 'hinglish'>('english');
+
   // Message input & submission
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
@@ -238,7 +241,7 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
       await streamTutorMessage(
         courseId,
         activeSessionId,
-        { content: messageContent },
+        { content: messageContent, language: languageMode },
         {
           onCitations: (citations) => {
             setSessionDetail(prev => {
@@ -280,7 +283,8 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
       console.warn('SSE Streaming connection note, attempting fallback:', streamErr);
       try {
         const assistantReply = await sendTutorMessage(courseId, activeSessionId, {
-          content: messageContent
+          content: messageContent,
+          language: languageMode,
         });
         setSessionDetail(prev => {
           if (!prev) return null;
@@ -368,8 +372,33 @@ export const TutorChatStudio: React.FC<TutorChatStudioProps> = ({
             </div>
           </div>
 
-          {/* Quick Actions */}
+          {/* Language Mode Toggle (Req 6d) & Quick Actions */}
           <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-lg p-0.5 bg-slate-850/80 border border-slate-750 bg-slate-800 text-xs shadow-inner">
+              <button
+                type="button"
+                onClick={() => setLanguageMode('english')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                  languageMode === 'english'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🌐 English
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguageMode('hinglish')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                  languageMode === 'hinglish'
+                    ? 'bg-amber-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Hindi explanations with English technical terms"
+              >
+                🇮🇳 Hinglish
+              </button>
+            </div>
             <button
               onClick={handleCreateSession}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow transition-all duration-150"

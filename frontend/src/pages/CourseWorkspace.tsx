@@ -47,7 +47,8 @@ import {
   ShieldAlert,
   Award,
   BarChart3,
-  Printer
+  Printer,
+  GitCommit
 } from 'lucide-react';
 import { TutorChatStudio } from '@/components/tutor/TutorChatStudio';
 import { AssessmentStudio } from '@/components/assessment/AssessmentStudio';
@@ -56,6 +57,7 @@ import { FlashcardStudio } from '@/components/flashcards/FlashcardStudio';
 import { AnalyticsStudio } from '@/components/analytics/AnalyticsStudio';
 import { ExamRevisionSheetModal } from '@/components/course/ExamRevisionSheetModal';
 import { AIStudyNotesModal } from '@/components/course/AIStudyNotesModal';
+import { CourseFlowMapStudio } from '@/components/course/CourseFlowMapStudio';
 
 const YouTubeIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -74,8 +76,8 @@ export const CourseWorkspace: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Default to 'materials' (Step 1) or query param
-  const queryTab = searchParams.get('tab') as 'materials' | 'tutor' | 'flashcards' | 'assessments' | 'mastery' | 'rag' | 'topics' | 'analytics' | null;
-  const [activeTab, setActiveTab] = useState<'materials' | 'tutor' | 'flashcards' | 'assessments' | 'mastery' | 'rag' | 'topics' | 'analytics'>(queryTab || 'materials');
+  const queryTab = searchParams.get('tab') as 'materials' | 'tutor' | 'flashcards' | 'assessments' | 'mastery' | 'rag' | 'topics' | 'analytics' | 'flowmap' | null;
+  const [activeTab, setActiveTab] = useState<'materials' | 'tutor' | 'flashcards' | 'assessments' | 'mastery' | 'rag' | 'topics' | 'analytics' | 'flowmap'>(queryTab || 'materials');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [selectedTutorSessionId, setSelectedTutorSessionId] = useState<string | null>(null);
 
@@ -642,6 +644,21 @@ export const CourseWorkspace: React.FC = () => {
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500 rounded-full" />
             )}
           </button>
+
+          <button
+            onClick={() => setActiveTab('flowmap')}
+            className={`pb-3 px-3.5 transition-all relative cursor-pointer whitespace-nowrap ${
+              activeTab === 'flowmap' ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span className="flex items-center space-x-2">
+              <GitCommit className="w-4 h-4 text-cyan-400" />
+              <span>6. Prerequisite Flow & Schedule</span>
+            </span>
+            {activeTab === 'flowmap' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 rounded-full" />
+            )}
+          </button>
         </div>
 
         {/* Alerts & Notifications */}
@@ -724,6 +741,17 @@ export const CourseWorkspace: React.FC = () => {
                 if (sessionId) setSelectedTutorSessionId(sessionId);
                 setActiveTab('tutor');
               }}
+            />
+          </div>
+        )}
+
+        {/* TAB: PREREQUISITE COURSE FLOW MAP & EBBINGHAUS REVISION SCHEDULE (REQ 1b, 6a, 6c) */}
+        {activeTab === 'flowmap' && (
+          <div className="space-y-6">
+            <CourseFlowMapStudio
+              courseId={course.id}
+              courseName={course.name}
+              onNavigateToTab={(tab) => setActiveTab(tab)}
             />
           </div>
         )}

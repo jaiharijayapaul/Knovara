@@ -52,6 +52,7 @@ export interface CreateSessionPayload {
 
 export interface SendMessagePayload {
   content: string;
+  language?: string;
 }
 
 export interface UpdateModePayload {

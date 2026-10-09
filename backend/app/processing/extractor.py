@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Tuple, Optional
 import httpx
 from youtube_transcript_api import YouTubeTranscriptApi
 from app.config import settings
+from app.processing.speech_cleaner import clean_transcript_speech
 
 logger = logging.getLogger(__name__)
 
@@ -165,8 +166,10 @@ class MultimodalExtractor:
                     time_span = group_end - group_start
 
                     if word_count >= 100 or time_span >= 50.0:
+                        raw_c = " ".join(current_texts)
+                        cleaned_c = clean_transcript_speech(raw_c) or raw_c
                         segments.append({
-                            "content": " ".join(current_texts),
+                            "content": cleaned_c,
                             "page_number": None,
                             "slide_number": None,
                             "timestamp_start": format_sec(group_start),
@@ -176,8 +179,10 @@ class MultimodalExtractor:
                         group_start = group_end
 
                 if current_texts:
+                    raw_c = " ".join(current_texts)
+                    cleaned_c = clean_transcript_speech(raw_c) or raw_c
                     segments.append({
-                        "content": " ".join(current_texts),
+                        "content": cleaned_c,
                         "page_number": None,
                         "slide_number": None,
                         "timestamp_start": format_sec(group_start),
@@ -311,10 +316,11 @@ class MultimodalExtractor:
                     c = item.get("content", "").strip()
                     if not c:
                         continue
+                    cleaned_c = clean_transcript_speech(c) or c
                     t_start = str(item.get("timestamp_start", "00:00")).strip()
                     t_end = str(item.get("timestamp_end", "01:00")).strip()
                     segments.append({
-                        "content": c,
+                        "content": cleaned_c,
                         "page_number": None,
                         "slide_number": None,
                         "timestamp_start": t_start if len(t_start) >= 5 else f"0{t_start}",
@@ -357,8 +363,9 @@ class MultimodalExtractor:
                     t_start_clean = re.sub(r"[.,]\d+$", "", t_start)
                     t_end_clean = re.sub(r"[.,]\d+$", "", t_end)
                     if cleaned:
+                        speech_cleaned = clean_transcript_speech(cleaned) or cleaned
                         segments.append({
-                            "content": cleaned,
+                            "content": speech_cleaned,
                             "page_number": None,
                             "slide_number": None,
                             "timestamp_start": t_start_clean,
@@ -604,10 +611,11 @@ class MultimodalExtractor:
 
             if word_count >= 100 or time_span >= 50.0:
                 combined_content = " ".join(current_texts)
+                cleaned_content = clean_transcript_speech(combined_content) or combined_content
                 start_str = format_timestamp(group_start)
                 end_str = format_timestamp(group_end)
                 segments.append({
-                    "content": combined_content,
+                    "content": cleaned_content,
                     "page_number": None,
                     "slide_number": None,
                     "timestamp_start": start_str,
@@ -619,10 +627,11 @@ class MultimodalExtractor:
 
         if current_texts:
             combined_content = " ".join(current_texts)
+            cleaned_content = clean_transcript_speech(combined_content) or combined_content
             start_str = format_timestamp(group_start)
             end_str = format_timestamp(group_end)
             segments.append({
-                "content": combined_content,
+                "content": cleaned_content,
                 "page_number": None,
                 "slide_number": None,
                 "timestamp_start": start_str,
@@ -778,8 +787,10 @@ class MultimodalExtractor:
                 if word_count >= 100 or (end_sec - start_sec >= 50.0):
                     fmt_start = group_start if len(group_start) >= 5 else f"0{group_start}"
                     fmt_end = group_end if len(group_end) >= 5 else f"0{group_end}"
+                    raw_joined = " ".join(group_texts)
+                    cleaned_joined = clean_transcript_speech(raw_joined) or raw_joined
                     segments.append({
-                        "content": " ".join(group_texts),
+                        "content": cleaned_joined,
                         "page_number": None,
                         "slide_number": None,
                         "timestamp_start": fmt_start,
@@ -791,8 +802,10 @@ class MultimodalExtractor:
             if group_texts:
                 fmt_start = group_start if len(group_start) >= 5 else f"0{group_start}"
                 fmt_end = group_end if len(group_end) >= 5 else f"0{group_end}"
+                raw_joined = " ".join(group_texts)
+                cleaned_joined = clean_transcript_speech(raw_joined) or raw_joined
                 segments.append({
-                    "content": " ".join(group_texts),
+                    "content": cleaned_joined,
                     "page_number": None,
                     "slide_number": None,
                     "timestamp_start": fmt_start,
@@ -805,8 +818,10 @@ class MultimodalExtractor:
                 chunk_words = words[w_start : w_start + chunk_size]
                 sec_start = idx * 60.0
                 sec_end = (idx + 1) * 60.0
+                raw_chunk = " ".join(chunk_words)
+                cleaned_chunk = clean_transcript_speech(raw_chunk) or raw_chunk
                 segments.append({
-                    "content": " ".join(chunk_words),
+                    "content": cleaned_chunk,
                     "page_number": None,
                     "slide_number": None,
                     "timestamp_start": format_timestamp(sec_start),

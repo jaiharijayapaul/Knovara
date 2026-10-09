@@ -5,7 +5,7 @@ and adaptive recommendation generation.
 
 import json
 import logging
-from typing import List
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -351,3 +351,73 @@ class MasteryService:
             mastered_count=mastered_count,
             total_count=total,
         )
+
+    @classmethod
+    def update_mastery_from_conversation(
+        cls,
+        db: Session,
+        user_id: str,
+        course_id: str,
+        topic: Optional[str],
+        user_message: str,
+        tutor_response: str,
+    ) -> None:
+        """
+        Updates Bayesian Knowledge Tracing (BKT) learner mastery from an active
+        conversational tutoring dialogue turn.
+        
+        Evaluates conversational signal:
+          - Evidence of understanding / confirmation / correct answering -> is_correct=True
+          - Evidence of confusion / help-seeking / struggle -> is_correct=False, with learning transit P(T) applied
+          - Concept resolution: uses session.topic or extracts relevant concept keyword
+        """
+        concept_label = (topic or "").strip()
+        if not concept_label:
+            concept_label = "General Fundamentals"
+
+        msg_lower = user_message.lower().strip()
+        
+        confusion_signals = [
+            "don't understand", "dont understand", "confused", "what does that mean",
+            "why is that", "help me", "not sure", "lost", "explain again", "hard to follow",
+            "why does", "i don't get it", "i dont get"
+        ]
+        is_confusion = any(sig in msg_lower for sig in confusion_signals)
+        
+        is_correct = not is_confusion if is_confusion else True
+
+        try:
+            record = MasteryRepository.get_or_create(
+                db=db,
+                user_id=user_id,
+                course_id=course_id,
+                concept_label=concept_label,
+            )
+
+            params = BKTParams(
+                p_know=record.p_know,
+                p_learn=record.p_learn,
+                p_guess=record.p_guess,
+                p_slip=record.p_slip,
+                mastery_threshold=record.mastery_threshold,
+            )
+
+            result = BKTEngine.update(
+                p_know=record.p_know,
+                is_correct=is_correct,
+                params=params,
+            )
+
+            MasteryRepository.update_bkt_state(
+                db=db,
+                record=record,
+                new_p_know=result.p_know_next,
+                is_correct=is_correct,
+            )
+            db.commit()
+            logger.info(
+                f"Conversational BKT update: user={user_id}, concept='{concept_label}', "
+                f"prior={round(result.p_know_prior, 3)} -> next={round(result.p_know_next, 3)}"
+            )
+        except Exception as exc:
+            logger.warning(f"Conversational BKT update failed for '{concept_label}': {exc}")

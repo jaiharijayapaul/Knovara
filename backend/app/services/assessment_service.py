@@ -124,6 +124,16 @@ class AssessmentService:
                 f"({payload.difficulty.capitalize()} level). Strictly grounded in verified course materials."
             )
 
+        # Collect previously asked questions to ensure novelty & avoid repetition (Req 3b)
+        previous_q_records = (
+            db.query(Question.question_text)
+            .join(Assessment, Question.assessment_id == Assessment.id)
+            .filter(Assessment.course_id == course_id)
+            .limit(30)
+            .all()
+        )
+        previous_stems = [q[0] for q in previous_q_records if q[0]]
+
         # Run psychometric question generator
         generated_q_data = await AssessmentGenerator.generate_questions(
             chunks=all_chunks,
@@ -134,6 +144,7 @@ class AssessmentService:
             topic=payload.topic,
             course_name=course.name,
             adaptive_blueprint=blueprint,
+            previous_stems=previous_stems,
         )
 
         total_pts = sum(float(q.get("points", 10.0)) for q in generated_q_data)

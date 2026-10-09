@@ -243,14 +243,23 @@ def test_submit_assessment_error_taxonomy_classification():
     assessment = gen_res.json()
     assessment_id = assessment["id"]
 
-    # For Q1 (remember): pick option B which represents a procedural slip (sign error)
-    # For Q2 (understand): pick option C which represents dimensionality confusion
+    # For Q1 (remember): pick option representing procedural slip (sign error)
+    # For Q2 (understand): pick option representing dimensionality confusion
     q1 = assessment["questions"][0]
     q2 = assessment["questions"][1]
 
+    opt_slip = next(
+        (o["id"] for o in q1["options"] if not o.get("is_correct") and o.get("misconception") and any(k in o["misconception"].lower() for k in ["procedural", "slip", "sign", "arithmetic"])),
+        "B"
+    )
+    opt_dim = next(
+        (o["id"] for o in q2["options"] if not o.get("is_correct") and o.get("misconception") and any(k in o["misconception"].lower() for k in ["dimension", "scale", "feature", "cardinality"])),
+        "C"
+    )
+
     answers = {
-        q1["id"]: "B",  # Sign error
-        q2["id"]: "C",  # Dimensionality confusion
+        q1["id"]: opt_slip,
+        q2["id"]: opt_dim,
     }
 
     submit_res = client.post(
