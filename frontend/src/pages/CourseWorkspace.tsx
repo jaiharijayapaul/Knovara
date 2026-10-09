@@ -296,9 +296,12 @@ export const CourseWorkspace: React.FC = () => {
         setSynthesisMessage(`YouTube lecture "${doc.filename}" successfully transcribed and indexed. Click "⚡ Synthesize from Uploads" to update topics and flashcards!`);
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail 
+      let msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail 
         || (err as Error)?.message 
         || 'Failed to ingest YouTube video. Please ensure the video URL is valid and has captions/transcripts enabled.';
+      if (msg === 'Network Error' || msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('network error')) {
+        msg = 'Connection to backend timed out or server was waking up from cold start. Ingesting large lecture transcripts and generating AI study notes can take ~30-60 seconds. Please click "Ingest" again or refresh the page to check if it completed.';
+      }
       setYoutubeError(msg);
     } finally {
       setIsIngestingYouTube(false);

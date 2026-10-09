@@ -68,7 +68,7 @@ const resolveBaseURL = (): string => {
 
 export const api = axios.create({
   baseURL: resolveBaseURL(),
-  timeout: 45000,
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },

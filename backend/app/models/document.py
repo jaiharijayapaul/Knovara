@@ -32,6 +32,11 @@ class VectorType(TypeDecorator):
         if value is None:
             return None
         if dialect.name == "postgresql" and HAS_PGVECTOR:
+            if isinstance(value, (list, tuple)):
+                if len(value) < self.dim:
+                    value = list(value) + [0.0] * (self.dim - len(value))
+                elif len(value) > self.dim:
+                    value = list(value)[:self.dim]
             return value
         if isinstance(value, (list, tuple)):
             import json
