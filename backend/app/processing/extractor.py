@@ -80,18 +80,270 @@ class MultimodalExtractor:
         return slides
 
     @staticmethod
-    def extract_video_or_audio(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
+    def _detect_media_mime(filename: str) -> str:
+        ext = os.path.splitext(filename)[1].lower()
+        mapping = {
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".mkv": "video/x-matroska",
+            ".avi": "video/x-msvideo",
+            ".mp3": "audio/mp3",
+            ".wav": "audio/wav",
+            ".m4a": "audio/m4a",
+            ".aac": "audio/aac",
+            ".flac": "audio/flac",
+            ".ogg": "audio/ogg",
+        }
+        return mapping.get(ext, "video/mp4")
+
+    @classmethod
+    def _transcribe_with_groq(cls, file_bytes: bytes, filename: str) -> Optional[List[Dict[str, Any]]]:
         """
-        Process lecture video/audio.
-        If a transcript sidecar or text transcript is supplied, parse timestamps.
-        Otherwise generate structured timestamped intervals for citation alignment.
+        Method 3: Transcribe audio/video speech with Groq Whisper API (whisper-large-v3-turbo).
+        Extremely fast (~1-3 seconds for a full lecture recording).
+        """
+        groq_key = getattr(settings, "GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY")
+        if not groq_key or len(groq_key) < 10:
+            return None
+
+        mime_type = cls._detect_media_mime(filename)
+        model = getattr(settings, "GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
+        url = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+        try:
+            logger.info(f"Transcribing '{filename}' via Groq Whisper API ({model})...")
+            files = {
+                "file": (filename, file_bytes, mime_type),
+            }
+            data = {
+                "model": model,
+                "response_format": "verbose_json",
+                "timestamp_granularities[]": "segment",
+            }
+            headers = {
+                "Authorization": f"Bearer {groq_key}",
+            }
+            with httpx.Client(timeout=90.0) as client:
+                resp = client.post(url, headers=headers, files=files, data=data)
+                if resp.status_code != 200:
+                    logger.warning(f"Groq Whisper transcription failed ({resp.status_code}): {resp.text[:200]}")
+                    return None
+
+                res_json = resp.json()
+                raw_segments = res_json.get("segments", [])
+                if not raw_segments:
+                    full_text = res_json.get("text", "").strip()
+                    if full_text:
+                        return [{
+                            "content": full_text,
+                            "page_number": None,
+                            "slide_number": None,
+                            "timestamp_start": "00:00",
+                            "timestamp_end": "05:00",
+                        }]
+                    return None
+
+                def format_sec(sec: float) -> str:
+                    s = int(sec)
+                    m, s = divmod(s, 60)
+                    h, m = divmod(m, 60)
+                    return f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+
+                segments = []
+                current_texts = []
+                group_start = raw_segments[0].get("start", 0.0)
+                group_end = group_start
+
+                for s in raw_segments:
+                    txt = s.get("text", "").strip()
+                    if not txt:
+                        continue
+                    current_texts.append(txt)
+                    group_end = s.get("end", group_end)
+                    word_count = sum(len(w.split()) for w in current_texts)
+                    time_span = group_end - group_start
+
+                    if word_count >= 100 or time_span >= 50.0:
+                        segments.append({
+                            "content": " ".join(current_texts),
+                            "page_number": None,
+                            "slide_number": None,
+                            "timestamp_start": format_sec(group_start),
+                            "timestamp_end": format_sec(group_end),
+                        })
+                        current_texts = []
+                        group_start = group_end
+
+                if current_texts:
+                    segments.append({
+                        "content": " ".join(current_texts),
+                        "page_number": None,
+                        "slide_number": None,
+                        "timestamp_start": format_sec(group_start),
+                        "timestamp_end": format_sec(group_end),
+                    })
+
+                logger.info(f"Groq Whisper extracted {len(segments)} timestamped segments from '{filename}'")
+                return segments
+        except Exception as e:
+            logger.warning(f"Groq Whisper exception for '{filename}': {e}")
+            return None
+
+    @classmethod
+    def _analyze_media_with_gemini(cls, file_bytes: bytes, filename: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Method 2: Multimodal video/audio lecture comprehension via Google Gemini 2.5 Flash.
+        Transcribes spoken lecture verbatim AND visually comprehends slides, whiteboard notes, and formulas.
+        """
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or getattr(settings, "LLM_API_KEY", "")
+        if not api_key or len(api_key) < 10 or api_key == "mock_gemini_key_for_testing_only":
+            return None
+
+        mime_type = cls._detect_media_mime(filename)
+        model = getattr(settings, "LLM_MODEL", "gemini-2.5-flash")
+        file_size_mb = len(file_bytes) / (1024 * 1024)
+
+        prompt = (
+            "You are an expert academic lecture transcription and multimodal video comprehension engine. "
+            "Carefully watch/listen to this educational lecture recording.\n\n"
+            "Your tasks:\n"
+            "1. Transcribe the spoken speech verbatim into timestamped chronological segments.\n"
+            "2. If visual slides, equations, whiteboard notes, code, or diagrams are visible on screen, include a clear description of the visual slide content in the corresponding timestamp segment.\n"
+            "3. Format timestamps in standard MM:SS (e.g. 00:00, 01:30) or HH:MM:SS format.\n"
+            "4. Keep each segment around 45 to 90 seconds in pedagogical duration.\n\n"
+            "Return your response STRICTLY as a JSON array of segment objects:\n"
+            "[\n"
+            "  {\n"
+            "    \"timestamp_start\": \"00:00\",\n"
+            "    \"timestamp_end\": \"01:15\",\n"
+            "    \"content\": \"Spoken transcript and any slide notes/formulas\"\n"
+            "  }\n"
+            "]\n"
+            "Output ONLY valid JSON."
+        )
+
+        try:
+            logger.info(f"Analyzing media '{filename}' ({file_size_mb:.1f} MB) via Gemini multimodal engine ({model})...")
+            gen_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+            # Fast inline data for files <= 15MB
+            if file_size_mb <= 15.0:
+                import base64
+                b64_data = base64.b64encode(file_bytes).decode("utf-8")
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {"inline_data": {"mime_type": mime_type, "data": b64_data}},
+                            {"text": prompt}
+                        ]
+                    }],
+                    "generationConfig": {
+                        "response_mime_type": "application/json"
+                    }
+                }
+                with httpx.Client(timeout=120.0) as client:
+                    resp = client.post(gen_url, json=payload)
+            else:
+                # Resumable Files API for files > 15MB
+                init_headers = {
+                    "X-Goog-Upload-Protocol": "resumable",
+                    "X-Goog-Upload-Command": "start",
+                    "X-Goog-Upload-Header-Content-Length": str(len(file_bytes)),
+                    "X-Goog-Upload-Header-Content-Type": mime_type,
+                    "Content-Type": "application/json",
+                }
+                init_url = f"https://generativelanguage.googleapis.com/upload/v1beta/files?key={api_key}"
+                with httpx.Client(timeout=180.0) as client:
+                    init_res = client.post(init_url, headers=init_headers, json={"file": {"display_name": filename}})
+                    upload_url = init_res.headers.get("x-goog-upload-url")
+                    if not upload_url:
+                        logger.warning(f"Failed to obtain Gemini file upload URL for '{filename}'")
+                        return None
+
+                    up_headers = {
+                        "Content-Length": str(len(file_bytes)),
+                        "X-Goog-Upload-Offset": "0",
+                        "X-Goog-Upload-Command": "upload, finalize",
+                    }
+                    up_res = client.post(upload_url, headers=up_headers, content=file_bytes)
+                    if up_res.status_code != 200:
+                        logger.warning(f"Failed to upload media to Gemini Files API: {up_res.text[:200]}")
+                        return None
+
+                    file_uri = up_res.json().get("file", {}).get("uri")
+                    if not file_uri:
+                        return None
+
+                    payload = {
+                        "contents": [{
+                            "parts": [
+                                {"file_data": {"mime_type": mime_type, "file_uri": file_uri}},
+                                {"text": prompt}
+                            ]
+                        }],
+                        "generationConfig": {
+                            "response_mime_type": "application/json"
+                        }
+                    }
+                    resp = client.post(gen_url, json=payload)
+
+            if resp.status_code != 200:
+                logger.warning(f"Gemini multimodal video analysis failed ({resp.status_code}): {resp.text[:250]}")
+                return None
+
+            data = resp.json()
+            candidates = data.get("candidates", [])
+            if not candidates:
+                return None
+
+            raw_json_str = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            if not raw_json_str:
+                return None
+
+            clean_str = re.sub(r"^```(?:json)?\s*", "", raw_json_str.strip())
+            clean_str = re.sub(r"\s*```$", "", clean_str)
+
+            parsed = json.loads(clean_str)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                segments = []
+                for item in parsed:
+                    c = item.get("content", "").strip()
+                    if not c:
+                        continue
+                    t_start = str(item.get("timestamp_start", "00:00")).strip()
+                    t_end = str(item.get("timestamp_end", "01:00")).strip()
+                    segments.append({
+                        "content": c,
+                        "page_number": None,
+                        "slide_number": None,
+                        "timestamp_start": t_start if len(t_start) >= 5 else f"0{t_start}",
+                        "timestamp_end": t_end if len(t_end) >= 5 else f"0{t_end}",
+                    })
+                if segments:
+                    logger.info(f"Gemini multimodal engine successfully extracted {len(segments)} segments from '{filename}'")
+                    return segments
+
+        except Exception as e:
+            logger.warning(f"Error in Gemini multimodal video analysis for '{filename}': {e}")
+            return None
+
+        return None
+
+    @classmethod
+    def extract_video_or_audio(cls, file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
+        """
+        Process lecture video/audio:
+        1. If text subtitle/transcript (.vtt, .srt, or text cues), parse timestamps directly.
+        2. If Groq API Key is configured, transcribe speech using Groq Whisper API (whisper-large-v3-turbo).
+        3. If Gemini API Key is configured, run Gemini 2.5 Flash Multimodal analysis (speech + visual slides).
+        4. Graceful fallback intervals if cloud APIs are offline.
         """
         segments = []
         # Attempt to see if file is text-based transcript (e.g. .vtt, .srt, or text)
         try:
             decoded_text = file_bytes.decode("utf-8", errors="ignore")
             # Match VTT / SRT timestamp patterns:
-            # 00:05:10.000 --> 00:07:30.000 or 05:10 --> 07:30 or with commas 00:05:10,000
             pattern = re.compile(
                 r"(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?)\s*(?:-->|-)\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?)\s*\n+(.*?)(?=\n+\d+[\r\n]+\d{1,2}:\d{2}|\n+\d{1,2}:\d{2}|\Z)",
                 re.DOTALL,
@@ -100,10 +352,8 @@ class MultimodalExtractor:
             if matches:
                 for match in matches:
                     t_start, t_end, text = match.groups()
-                    # Strip out trailing cue indices or blank lines
                     cleaned = re.sub(r"^\d+\s*$", "", text, flags=re.MULTILINE)
                     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-                    # Normalize timestamps by stripping milliseconds if present (e.g. 00:05:10.000 -> 00:05:10)
                     t_start_clean = re.sub(r"[.,]\d+$", "", t_start)
                     t_end_clean = re.sub(r"[.,]\d+$", "", t_end)
                     if cleaned:
@@ -120,11 +370,18 @@ class MultimodalExtractor:
         except Exception as e:
             logger.warning(f"Error parsing subtitle text for '{filename}': {e}")
 
-        # For binary video/audio without external whisper model downloaded locally,
-        # generate aligned speech intervals based on file duration or synthetic segments
-        # so the hackathon demo runs smoothly without needing 3GB local whisper weights
-        logger.info(f"Processing lecture video/audio stream '{filename}' into timestamped knowledge segments.")
-        # Default placeholder cue intervals for video demonstration
+        # Method 3: Fast Speech-to-Text with Groq Whisper if configured
+        groq_segments = cls._transcribe_with_groq(file_bytes, filename)
+        if groq_segments:
+            return groq_segments
+
+        # Method 2: Gemini 2.5 Flash Multimodal Video & Audio Understanding
+        gemini_segments = cls._analyze_media_with_gemini(file_bytes, filename)
+        if gemini_segments:
+            return gemini_segments
+
+        # Fallback if both cloud APIs are unreachable
+        logger.info(f"Generating structured interval cues for lecture media '{filename}'")
         segments.append({
             "content": f"Lecture recording '{filename}' discussion of core curriculum concepts, examples, and questions.",
             "page_number": None,

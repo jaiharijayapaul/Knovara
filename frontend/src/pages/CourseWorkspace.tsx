@@ -1035,7 +1035,7 @@ export const CourseWorkspace: React.FC = () => {
                 type="file"
                 multiple
                 className="hidden"
-                accept=".pdf,.pptx,.mp4,.webm,.mp3,.wav,.txt,.vtt,.srt"
+                accept=".pdf,.pptx,.mp4,.webm,.mov,.mkv,.mp3,.wav,.m4a,.aac,.flac,.txt,.vtt,.srt"
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
                     handleFilesUpload(e.target.files);
@@ -1050,11 +1050,11 @@ export const CourseWorkspace: React.FC = () => {
                 <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
                   <Presentation className="w-5 h-5" />
                 </div>
-                <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
-                  <YouTubeIcon className="w-5 h-5" />
-                </div>
                 <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
                   <Video className="w-5 h-5" />
+                </div>
+                <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <Music className="w-5 h-5" />
                 </div>
                 <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
                   <UploadCloud className="w-5 h-5" />
@@ -1066,7 +1066,7 @@ export const CourseWorkspace: React.FC = () => {
                   {isUploading ? (uploadProgressText || 'Analyzing Study Material with AI...') : 'Drop your study materials here, or click to browse'}
                 </h3>
                 <p className="text-xs text-slate-400 max-w-lg mx-auto">
-                  Supports PDF textbooks, PowerPoint slides (.pptx), Word/Text notes, or audio/video files. <strong>Multiple select enabled:</strong> you can select and upload multiple files together!
+                  Supports PDF textbooks, PowerPoint slides (.pptx), <strong>Video/Audio lectures (.mp4, .webm, .mov, .mp3, .wav)</strong> with AI speech transcription and visual slide analysis, or lecture notes.
                 </p>
                 <div className="pt-2 flex items-center justify-center">
                   <button

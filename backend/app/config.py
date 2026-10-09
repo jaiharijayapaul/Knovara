@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     WEBSHARE_PROXY_USERNAME: Optional[str] = None
     WEBSHARE_PROXY_PASSWORD: Optional[str] = None
 
+    # Fast Speech-to-Text via Groq Whisper API (Optional)
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_WHISPER_MODEL: str = "whisper-large-v3-turbo"
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
