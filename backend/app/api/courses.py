@@ -231,7 +231,7 @@ def get_course_flow_map(
 )
 def get_study_schedule(
     course_id: str,
-    target_exam_date: str = None,
+    target_exam_date: str | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

@@ -219,7 +219,7 @@ class CourseService:
                 detail="Course workspace not found.",
             )
 
-        topics = course.topics or []
+        topics = list(course.topics) if course.topics else []
         mastery_records = MasteryRepository.get_all_for_course(db, user_id=user_id, course_id=course_id)
         mastery_by_topic = {m.concept_label.lower().strip(): m for m in mastery_records}
 
@@ -303,7 +303,7 @@ class CourseService:
         )
 
     @staticmethod
-    def get_study_schedule(db: Session, course_id: str, user_id: str, target_exam_date: str = None):
+    def get_study_schedule(db: Session, course_id: str, user_id: str, target_exam_date: str | None = None):
         """
         Generates an adaptive spaced-repetition study schedule based on
         the Hermann Ebbinghaus forgetting curve R = e^(-t/S) and BKT mastery state.
@@ -330,7 +330,7 @@ class CourseService:
             exam_dt = now + timedelta(days=14)
 
         days_until_exam = max(1, (exam_dt - now).days)
-        topics = course.topics or []
+        topics = list(course.topics) if course.topics else []
         mastery_records = MasteryRepository.get_all_for_course(db, user_id=user_id, course_id=course_id)
         mastery_by_topic = {m.concept_label.lower().strip(): m for m in mastery_records}
 
