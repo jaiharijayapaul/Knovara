@@ -69,16 +69,31 @@ export const AdminDashboard: React.FC = () => {
     else setLoading(true);
 
     try {
-      const [statsRes, usersRes, coursesRes, activityRes] = await Promise.all([
+      const [statsRes, usersRes, coursesRes, activityRes] = await Promise.allSettled([
         fetchAdminStats(),
         fetchAdminUsers(userSearch || undefined),
         fetchAdminCourses(courseSearch || undefined),
         fetchAdminActivity(30),
       ]);
-      setStats(statsRes);
-      setUsers(usersRes);
-      setCourses(coursesRes);
-      setActivity(activityRes);
+
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value);
+      if (usersRes.status === 'fulfilled') setUsers(usersRes.value);
+      if (coursesRes.status === 'fulfilled') setCourses(coursesRes.value);
+      if (activityRes.status === 'fulfilled') setActivity(activityRes.value);
+
+      const allFailed =
+        statsRes.status === 'rejected' &&
+        usersRes.status === 'rejected' &&
+        coursesRes.status === 'rejected' &&
+        activityRes.status === 'rejected';
+
+      if (allFailed) {
+        const rejectionReason = (statsRes as PromiseRejectedResult).reason;
+        const msg =
+          rejectionReason?.response?.data?.detail ||
+          'Failed to load administrative telemetry. Please verify administrative privileges.';
+        showNotification(msg, 'error');
+      }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||

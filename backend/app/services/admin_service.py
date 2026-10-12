@@ -184,54 +184,66 @@ class AdminService:
         events = []
 
         # 1. Recent documents
-        recent_docs = db.query(Document).order_by(desc(Document.created_at)).limit(limit).all()
-        for d in recent_docs:
-            course = d.course
-            owner = course.user if course else None
-            events.append(
-                AdminActivityItem(
-                    id=f"doc_{d.id}",
-                    type="document_upload",
-                    title=f"Material Added: {d.filename[:50]}",
-                    detail=f"Format: {d.file_type.upper()} | Chunks: {len(d.chunks)} | Course: {course.name if course else 'Unknown'}",
-                    user_name=owner.name if owner else None,
-                    user_email=owner.email if owner else None,
-                    timestamp=d.created_at,
+        try:
+            recent_docs = db.query(Document).order_by(desc(Document.created_at)).limit(limit).all()
+            for d in recent_docs:
+                course = getattr(d, "course", None)
+                owner = getattr(course, "user", None) if course else None
+                chunks_count = len(d.chunks) if hasattr(d, "chunks") and d.chunks else 0
+                events.append(
+                    AdminActivityItem(
+                        id=f"doc_{d.id}",
+                        type="document_upload",
+                        title=f"Material Added: {(d.filename or 'Document')[:50]}",
+                        detail=f"Format: {(d.file_type or 'DOC').upper()} | Chunks: {chunks_count} | Course: {course.name if course else 'Unknown'}",
+                        user_name=owner.name if owner else None,
+                        user_email=owner.email if owner else None,
+                        timestamp=d.created_at,
+                    )
                 )
-            )
+        except Exception as e:
+            logger.warning(f"Error querying recent documents for admin audit: {e}")
 
         # 2. Recent courses
-        recent_courses = db.query(Course).order_by(desc(Course.created_at)).limit(limit).all()
-        for c in recent_courses:
-            owner = c.user
-            events.append(
-                AdminActivityItem(
-                    id=f"course_{c.id}",
-                    type="course_created",
-                    title=f"Course Created: {c.name[:50]}",
-                    detail=f"Subject: {c.subject} | Description: {(c.description or 'None')[:60]}",
-                    user_name=owner.name if owner else None,
-                    user_email=owner.email if owner else None,
-                    timestamp=c.created_at,
+        try:
+            recent_courses = db.query(Course).order_by(desc(Course.created_at)).limit(limit).all()
+            for c in recent_courses:
+                owner = getattr(c, "user", None)
+                events.append(
+                    AdminActivityItem(
+                        id=f"course_{c.id}",
+                        type="course_created",
+                        title=f"Course Created: {(c.name or 'Course')[:50]}",
+                        detail=f"Subject: {c.subject or 'General'} | Description: {(c.description or 'None')[:60]}",
+                        user_name=owner.name if owner else None,
+                        user_email=owner.email if owner else None,
+                        timestamp=c.created_at,
+                    )
                 )
-            )
+        except Exception as e:
+            logger.warning(f"Error querying recent courses for admin audit: {e}")
 
         # 3. Recent tutor sessions
-        recent_sessions = db.query(TutorSession).order_by(desc(TutorSession.created_at)).limit(limit).all()
-        for s in recent_sessions:
-            course = s.course
-            owner = course.user if course else None
-            events.append(
-                AdminActivityItem(
-                    id=f"tutor_{s.id}",
-                    type="tutor_session",
-                    title=f"Socratic AI Chat ({s.mode.upper()})",
-                    detail=f"Messages: {len(s.messages)} | Course: {course.name if course else 'Unknown'}",
-                    user_name=owner.name if owner else None,
-                    user_email=owner.email if owner else None,
-                    timestamp=s.created_at,
+        try:
+            recent_sessions = db.query(TutorSession).order_by(desc(TutorSession.created_at)).limit(limit).all()
+            for s in recent_sessions:
+                course = getattr(s, "course", None)
+                owner = getattr(course, "user", None) if course else None
+                mode_str = getattr(s, "pedagogical_mode", "socratic") or "socratic"
+                msg_count = len(s.messages) if hasattr(s, "messages") and s.messages else 0
+                events.append(
+                    AdminActivityItem(
+                        id=f"tutor_{s.id}",
+                        type="tutor_session",
+                        title=f"AI Tutor Session ({mode_str.replace('_', ' ').title()})",
+                        detail=f"Messages: {msg_count} | Course: {course.name if course else 'Unknown'}",
+                        user_name=owner.name if owner else None,
+                        user_email=owner.email if owner else None,
+                        timestamp=s.created_at,
+                    )
                 )
-            )
+        except Exception as e:
+            logger.warning(f"Error querying recent tutor sessions for admin audit: {e}")
 
         # Sort all events chronologically descending
         events.sort(key=lambda x: x.timestamp, reverse=True)
